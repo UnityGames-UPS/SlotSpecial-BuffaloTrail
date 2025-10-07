@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
+using Unity.VisualScripting;
 
 public class AnimationController : MonoBehaviour
 {
@@ -21,20 +22,26 @@ public class AnimationController : MonoBehaviour
     private List<Tweener> m_SlotsAnim = new List<Tweener>();
     private bool m_PlayingAnimation = false;
 
-    internal void StartAnimation(List<List<List<int>>> m_SymbolsToEmit)
+    internal void StartAnimation(List<WinningCombination> winningCombinations)
     {
-        m_PlayingAnimation = true;
-        if(m_AnimationRoutine == null)
-            m_AnimationRoutine = StartCoroutine(ActivateAllAnimation());
+        List<List<int>> allPositions = new List<List<int>>();
+        foreach (var combo in winningCombinations)
+        {
+            if (combo.positions != null)
+                allPositions.AddRange(combo.positions);
+        }
 
-        m_Cords = m_SymbolsToEmit;
+        if (m_AnimationRoutine != null)
+            StopCoroutine(m_AnimationRoutine);
+
+        m_AnimationRoutine = StartCoroutine(ActivateAllAnimation(allPositions));
     }
 
     internal void StopAnimation()
     {
         m_PlayingAnimation = false;
         ResetAnimatedView();
-        if(m_AnimationRoutine != null)
+        if (m_AnimationRoutine != null)
             StopCoroutine(m_AnimationRoutine);
         m_AnimationRoutine = null;
 
@@ -42,39 +49,72 @@ public class AnimationController : MonoBehaviour
         m_Cords.TrimExcess();
     }
 
-    private IEnumerator ActivateAllAnimation()
+    private IEnumerator ActivateAllAnimation(List<List<int>> symbolPositions)
     {
+        m_PlayingAnimation = true;
+
         while (m_PlayingAnimation)
         {
-            foreach (var i in m_Cords)
+            foreach (var pos in symbolPositions)
             {
-                foreach (var k in i)
-                {
-                    ActivateAnimatedView(k[0], k[1]);
-                }
+                if (pos.Count < 2) continue;
+                ActivateAnimatedView(pos[0], pos[1]);
             }
+
             yield return new WaitForSeconds(1f);
             ResetAnimatedView();
-            foreach (var i in m_Cords)
-            {
-                foreach (var k in i)
-                {
-                    ActivateAnimatedView(k[0], k[1]);
-                }
-                yield return new WaitForSeconds(1f);
-                ResetAnimatedView();
-            }
-            yield return new WaitForSeconds(1f);
-            ResetAnimatedView();
+
+            yield return new WaitForSeconds(0.5f);
         }
     }
 
+    // private IEnumerator PlayWinSequence(List<WinningCombination> winningCombinations)
+    // {
+    //     m_PlayingAnimation = true;
+
+    //     foreach (var combo in winningCombinations)
+    //     {
+
+    //         yield return StartCoroutine(AnimateCombo(combo));
+    //         ResetAnimatedView();
+    //         yield return new WaitForSeconds(0.3f);
+    //     }
+
+    //     yield return new WaitForSeconds(1.5f);
+    //     m_PlayingAnimation = false;
+    // }
+
+    // private IEnumerator AnimateCombo(WinningCombination combo)
+    // {
+    //     // Highlight each symbol in the current winning combination
+    //     foreach (var pos in combo.positions)
+    //     {
+    //         if (pos.Count < 2) continue;
+
+    //         int col = pos[0];
+    //         int row = pos[1];
+
+    //         ActivateAnimatedView(col, row);
+
+    //     }
+    //     yield return new WaitForSeconds(1.2f);
+    // }
+
     internal void FreeSpinCoinAnimate()
     {
-        for (int i = 0; i < SocketManager.resultData.fsWinningSymbols.Count; i++)
+        for (int i = 0; i < SocketManager.resultData.features.freeSpin.wildMultiplier.Count; i++)
         {
+            var wm = SocketManager.resultData.features.freeSpin.wildMultiplier[i];
+            if (wm.position == null || wm.position.Count < 2)
+                continue;
 
-            m_AnimatedSlots[SocketManager.resultData.fsWinningSymbols[i][1]].slotImages[SocketManager.resultData.fsWinningSymbols[i][0]].GetComponent<ImageAnimation>().StartAnimation();
+            int x = wm.position[0];
+            int y = wm.position[1];
+
+            if (y < m_AnimatedSlots.Count && x < m_AnimatedSlots[y].slotImages.Count)
+            {
+                m_AnimatedSlots[y].slotImages[x].GetComponent<ImageAnimation>().StartAnimation();
+            }
         }
     }
 
@@ -88,7 +128,7 @@ public class AnimationController : MonoBehaviour
         m_AnimatedSlots[i].slotImages[j].gameObject.SetActive(true);
         m_SlotBehaviour.Tempimages[i].slotImages[j].gameObject.SetActive(false);
         //m_AnimatedSlots[i].slotImages[j].transform.DOScale(1.2f, 1);
-        if(m_AnimatedSlots[i].slotImages[j].gameObject.GetComponent<ImageAnimation>().textureArray.Count > 0)
+        if (m_AnimatedSlots[i].slotImages[j].gameObject.GetComponent<ImageAnimation>().textureArray.Count > 0)
             m_AnimatedSlots[i].slotImages[j].gameObject.GetComponent<ImageAnimation>().StartAnimation();
         else
         {
@@ -100,9 +140,9 @@ public class AnimationController : MonoBehaviour
 
     private void ResetAnimatedView()
     {
-        for(int i = 0; i < m_AnimatedSlots.Count; i++)
+        for (int i = 0; i < m_AnimatedSlots.Count; i++)
         {
-            for(int j = 0; j < m_AnimatedSlots[i].slotImages.Count; j++)
+            for (int j = 0; j < m_AnimatedSlots[i].slotImages.Count; j++)
             {
                 m_AnimatedSlots[i].slotImages[j].gameObject.SetActive(false);
                 m_SlotBehaviour.Tempimages[i].slotImages[j].gameObject.SetActive(true);
@@ -112,7 +152,7 @@ public class AnimationController : MonoBehaviour
                     m_AnimatedSlots[i].slotImages[j].transform.localScale = new Vector3(1, 1, 1);
             }
         }
-        foreach(var i in m_SlotsAnim)
+        foreach (var i in m_SlotsAnim)
         {
             i.Kill();
         }

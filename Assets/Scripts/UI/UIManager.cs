@@ -64,11 +64,8 @@ public class UIManager : MonoBehaviour
     [SerializeField]
     private GameObject MainPopup_Object;
 
-    [Header("About Popup")]
-    [SerializeField]
-    private GameObject AboutPopup_Object;
-    [SerializeField]
-    private Button AboutExit_Button;
+
+
     [SerializeField]
     private Image AboutLogo_Image;
     [SerializeField]
@@ -235,12 +232,6 @@ public class UIManager : MonoBehaviour
         if (Exit_Button) Exit_Button.onClick.RemoveAllListeners();
         if (Exit_Button) Exit_Button.onClick.AddListener(CloseMenu);
 
-        //if (About_Button) About_Button.onClick.RemoveAllListeners();
-        //if (About_Button) About_Button.onClick.AddListener(delegate { OpenPopup(AboutPopup_Object); });
-
-        //if (AboutExit_Button) AboutExit_Button.onClick.RemoveAllListeners();
-        //if (AboutExit_Button) AboutExit_Button.onClick.AddListener(delegate { ClosePopup(AboutPopup_Object); });
-
         if (Info_Button) Info_Button.onClick.RemoveAllListeners();
         if (Info_Button) Info_Button.onClick.AddListener(delegate { OpenPopup(Info_Object); CloseMenu(); });
 
@@ -266,35 +257,39 @@ public class UIManager : MonoBehaviour
         if (SoundOff_Object) SoundOff_Object.SetActive(false);
 
         if (GameExit_Button) GameExit_Button.onClick.RemoveAllListeners();
-        if (GameExit_Button) GameExit_Button.onClick.AddListener(delegate { 
+        if (GameExit_Button) GameExit_Button.onClick.AddListener(delegate
+        {
             OpenPopup(QuitPopup_Object);
             CloseMenu();
             Debug.Log("Quit event: pressed Big_X button");
-            
-            });
+
+        });
 
         if (NoQuit_Button) NoQuit_Button.onClick.RemoveAllListeners();
-        if (NoQuit_Button) NoQuit_Button.onClick.AddListener(delegate { 
-            ClosePopup(QuitPopup_Object); 
+        if (NoQuit_Button) NoQuit_Button.onClick.AddListener(delegate
+        {
+            ClosePopup(QuitPopup_Object);
             Debug.Log("quit event: pressed NO Button ");
-             });
+        });
 
         if (CrossQuit_Button) CrossQuit_Button.onClick.RemoveAllListeners();
-        if (CrossQuit_Button) CrossQuit_Button.onClick.AddListener(delegate { 
-            ClosePopup(QuitPopup_Object); 
+        if (CrossQuit_Button) CrossQuit_Button.onClick.AddListener(delegate
+        {
+            ClosePopup(QuitPopup_Object);
             Debug.Log("quit event: pressed Small_X Button ");
-            
-             });
+
+        });
 
         if (LBExit_Button) LBExit_Button.onClick.RemoveAllListeners();
         if (LBExit_Button) LBExit_Button.onClick.AddListener(delegate { ClosePopup(LBPopup_Object); });
 
         if (YesQuit_Button) YesQuit_Button.onClick.RemoveAllListeners();
-        if (YesQuit_Button) YesQuit_Button.onClick.AddListener(delegate{
+        if (YesQuit_Button) YesQuit_Button.onClick.AddListener(delegate
+        {
             CallOnExitFunction();
             Debug.Log("quit event: pressed YES Button ");
-            
-            });
+
+        });
 
         if (CloseDisconnect_Button) CloseDisconnect_Button.onClick.RemoveAllListeners();
         if (CloseDisconnect_Button) CloseDisconnect_Button.onClick.AddListener(delegate { CallOnExitFunction(); socketManager.ReactNativeCallOnFailedToConnect(); }); //BackendChanges
@@ -303,7 +298,7 @@ public class UIManager : MonoBehaviour
         if (CloseAD_Button) CloseAD_Button.onClick.AddListener(CallOnExitFunction);
 
         if (FreeSpin_Button) FreeSpin_Button.onClick.RemoveAllListeners();
-        if (FreeSpin_Button) FreeSpin_Button.onClick.AddListener(delegate{ StartFreeSpins(FreeSpins); });
+        if (FreeSpin_Button) FreeSpin_Button.onClick.AddListener(delegate { StartFreeSpins(FreeSpins); });
 
         if (QuitSplash_button) QuitSplash_button.onClick.RemoveAllListeners();
         if (QuitSplash_button) QuitSplash_button.onClick.AddListener(delegate { OpenPopup(QuitPopup_Object); CloseMenu(); });
@@ -326,20 +321,19 @@ public class UIManager : MonoBehaviour
         if (SkipWinAnimation) SkipWinAnimation.onClick.RemoveAllListeners();
         if (SkipWinAnimation) SkipWinAnimation.onClick.AddListener(SkipWin);
 
-        //AssignBetButtons(m_DummyBetValues);
 
     }
 
-    #region [[===BET BUTTONS HANDLING===]]
+    #region [BET BUTTONS HANDLING]
     internal void AssignBetButtons(List<double> m_bet_items)
     {
         for (int i = 0; i < m_BetButtons.Count; i++)
         {
             Button m_Temp_Bet = m_BetButtons[i];
-            if(i < m_bet_items.Count)
+            if (i < m_bet_items.Count)
             {
                 m_Temp_Bet.gameObject.SetActive(true);
-                m_Temp_Bet.transform.GetChild(0).GetComponent<TMP_Text>().text = m_bet_items[i].ToString("f2");
+                m_Temp_Bet.transform.GetChild(0).GetComponent<TMP_Text>().text = m_bet_items[i].ToString("f3");
                 m_Temp_Bet.onClick.RemoveAllListeners();
                 m_Temp_Bet.onClick.AddListener(() =>
                 {
@@ -394,21 +388,17 @@ public class UIManager : MonoBehaviour
         OpenPopup(LBPopup_Object);
     }
 
-    internal void DisconnectionPopup(bool isReconnection)
+    internal void DisconnectionPopup()
     {
-        //if(isReconnection)
-        //{
-        //    OpenPopup(ReconnectPopup_Object);
-        //}
-        //else
-        //{
-        //    ClosePopup(ReconnectPopup_Object);
-        //}
-
         if (!isExit)
         {
+            isExit = true;
             OpenPopup(DisconnectPopup_Object);
         }
+    }
+    internal void ReconnectionPopup()
+    {
+        OpenPopup(ReconnectPopup_Object);
     }
 
     internal void PopulateWin(int value, double amount)
@@ -419,18 +409,18 @@ public class UIManager : MonoBehaviour
         m_WinImage.gameObject.SetActive(false);
         bool winToActive = false;
 
-        switch(value)
+        switch (value)
         {
             case 1:
                 winToActive = true;
-                foreach(var i in m_BigWin)
+                foreach (var i in m_BigWin)
                 {
                     m_WinImage.textureArray.Add(i);
                 }
                 break;
             case 2:
                 winToActive = true;
-                foreach(var i in m_MegaWin)
+                foreach (var i in m_MegaWin)
                 {
                     m_WinImage.textureArray.Add(i);
                 }
@@ -455,7 +445,7 @@ public class UIManager : MonoBehaviour
         slotManager.FreeSpin(spins);
     }
 
-    internal void FreeSpinProcess(int spins, int newSpins)
+    internal void FreeSpinProcess(int spins)
     {
         int ExtraSpins = spins - FreeSpins;
         FreeSpins = spins;
@@ -463,7 +453,8 @@ public class UIManager : MonoBehaviour
         if (FreeSpinPopup_Object) FreeSpinPopup_Object.SetActive(true);
         if (Free_Text) Free_Text.text = ExtraSpins.ToString() + " Free spins awarded.";
         if (MainPopup_Object) MainPopup_Object.SetActive(true);
-        DOVirtual.DelayedCall(2f, () => {
+        DOVirtual.DelayedCall(2f, () =>
+        {
             StartFreeSpins(spins);
         });
     }
@@ -473,11 +464,12 @@ public class UIManager : MonoBehaviour
         double initAmount = 0.00;
         if (WinPopup_Object) WinPopup_Object.SetActive(true);
         if (MainPopup_Object) MainPopup_Object.SetActive(true);
-        float delay=1.4f;
-        float closeDelay=1.7f;
-        if(slotManager.IsTurboOn){
-            delay=.7f;
-            closeDelay=1f;
+        float delay = 1.4f;
+        float closeDelay = 1.7f;
+        if (slotManager.IsTurboOn)
+        {
+            delay = .7f;
+            closeDelay = 1f;
         }
         WinPopupTextTween = DOTween.To(() => initAmount, (val) => initAmount = val, (double)amount, delay).OnUpdate(() =>
         {
@@ -493,21 +485,11 @@ public class UIManager : MonoBehaviour
 
     internal void ADfunction()
     {
-        OpenPopup(ADPopup_Object); 
+        OpenPopup(ADPopup_Object);
     }
 
-    internal void InitialiseUIData(string SupportUrl, string AbtImgUrl, string TermsUrl, string PrivacyUrl, Paylines symbolsText)
+    internal void InitialiseUIData(Paylines symbolsText)
     {
-        if (Support_Button) Support_Button.onClick.RemoveAllListeners();
-        if (Support_Button) Support_Button.onClick.AddListener(delegate { UrlButtons(SupportUrl); });
-
-        if (Terms_Button) Terms_Button.onClick.RemoveAllListeners();
-        if (Terms_Button) Terms_Button.onClick.AddListener(delegate { UrlButtons(TermsUrl); });
-
-        if (Privacy_Button) Privacy_Button.onClick.RemoveAllListeners();
-        if (Privacy_Button) Privacy_Button.onClick.AddListener(delegate { UrlButtons(PrivacyUrl); });
-
-        StartCoroutine(DownloadImage(AbtImgUrl));
         PopulateSymbolsPayout(symbolsText);
     }
 
@@ -516,48 +498,48 @@ public class UIManager : MonoBehaviour
         for (int i = 0; i < SymbolsText.Length; i++)
         {
             string text = null;
-            if (paylines.symbols[i].Multiplier[0][0] != 0)
+            if (paylines.symbols[i].multiplier[0] != 0)
             {
-                text += "<color=yellow>5x - </color>" + paylines.symbols[i].Multiplier[0][0] + "x";
+                text += "<color=yellow>5x - </color>" + paylines.symbols[i].multiplier[0] + "x";
             }
-            if (paylines.symbols[i].Multiplier[1][0] != 0)
+            if (paylines.symbols[i].multiplier[1] != 0)
             {
-                text += "<color=yellow>\n4x - </color>" + paylines.symbols[i].Multiplier[1][0] + "x";
+                text += "<color=yellow>\n4x - </color>" + paylines.symbols[i].multiplier[1] + "x";
             }
-            if (paylines.symbols[i].Multiplier[2][0] != 0)
+            if (paylines.symbols[i].multiplier[2] != 0)
             {
-                text += "<color=yellow>\n3x - </color>" + paylines.symbols[i].Multiplier[2][0] + "x";
+                text += "<color=yellow>\n3x - </color>" + paylines.symbols[i].multiplier[2] + "x";
             }
-            if(paylines.symbols[i].Multiplier[3][0] != 0)
+            if (paylines.symbols[i].multiplier[3] != 0)
             {
-                text += "<color=yellow>\n2x - </color>" + paylines.symbols[i].Multiplier[3][0] + "x";
+                text += "<color=yellow>\n2x - </color>" + paylines.symbols[i].multiplier[3] + "x";
             }
             if (SymbolsText[i]) SymbolsText[i].text = text;
         }
 
         for (int i = 0; i < paylines.symbols.Count; i++)
         {
-            if (paylines.symbols[i].Name.ToUpper() == "FREESPIN")
+            if (paylines.symbols[i].name.ToUpper() == "FREESPIN")
             {
                 //if (FreeSpin_Text) FreeSpin_Text.text = paylines.symbols[i].description.ToString();
-                string freespintext = $"Free game \n2x {paylines.symbols[i].Multiplier[3][1]} FREE SPINS \n3x {paylines.symbols[i].Multiplier[2][1]} FREE SPINS \n4x {paylines.symbols[i].Multiplier[1][1]} FREE SPINS \n5x {paylines.symbols[i].Multiplier[0][1]} FREE SPINS";
+                string freespintext = $"Free game \n2x {paylines.symbols[i].multiplier[3]} FREE SPINS \n3x {paylines.symbols[i].multiplier[2]} FREE SPINS \n4x {paylines.symbols[i].multiplier[1]} FREE SPINS \n5x {paylines.symbols[i].multiplier[0]} FREE SPINS";
                 if (FreeSpin_Text) FreeSpin_Text.text = freespintext;
             }
-            if (paylines.symbols[i].Name.ToUpper() == "SCATTER")
+            if (paylines.symbols[i].name.ToUpper() == "SCATTER")
             {
-                if (Scatter_Text) Scatter_Text.text = paylines.symbols[i].description.ToString();
+                // if (Scatter_Text) Scatter_Text.text = paylines.symbols[i].description.ToString();
             }
-            if (paylines.symbols[i].Name.ToUpper() == "JACKPOT")
+            if (paylines.symbols[i].name.ToUpper() == "JACKPOT")
             {
-                if (Jackpot_Text) Jackpot_Text.text = paylines.symbols[i].description.ToString();
+                // if (Jackpot_Text) Jackpot_Text.text = paylines.symbols[i].description.ToString();
             }
-            if (paylines.symbols[i].Name.ToUpper() == "BONUS")
+            if (paylines.symbols[i].name.ToUpper() == "BONUS")
             {
-                if (Bonus_Text) Bonus_Text.text = paylines.symbols[i].description.ToString();
+                // if (Bonus_Text) Bonus_Text.text = paylines.symbols[i].description.ToString();
             }
-            if (paylines.symbols[i].Name.ToUpper() == "WILD")
+            if (paylines.symbols[i].name.ToUpper() == "WILD")
             {
-                if (Wild_Text) Wild_Text.text = paylines.symbols[i].description.ToString();
+                // if (Wild_Text) Wild_Text.text = paylines.symbols[i].description.ToString();
             }
         }
     }
@@ -640,9 +622,21 @@ public class UIManager : MonoBehaviour
     {
         if (audioController) audioController.PlayNormalButton();
         if (Popup) Popup.SetActive(false);
-        if (!DisconnectPopup_Object.activeSelf) 
+        if (!DisconnectPopup_Object.activeSelf)
         {
             if (MainPopup_Object) MainPopup_Object.SetActive(false);
+        }
+    }
+
+    internal void CheckAndClosePopups()
+    {
+        if (ReconnectPopup_Object.activeInHierarchy)
+        {
+            ClosePopup(ReconnectPopup_Object);
+        }
+        if (DisconnectPopup_Object.activeInHierarchy)
+        {
+            ClosePopup(DisconnectPopup_Object);
         }
     }
 
@@ -681,31 +675,7 @@ public class UIManager : MonoBehaviour
         {
             if (SoundOn_Object) SoundOn_Object.SetActive(false);
             if (SoundOff_Object) SoundOff_Object.SetActive(true);
-            if(audioController) audioController.MuteUnmute(Sound.Sound, true, true);
-        }
-    }
-
-    private IEnumerator DownloadImage(string url)
-    {
-        // Create a UnityWebRequest object to download the image
-        UnityWebRequest request = UnityWebRequestTexture.GetTexture(url);
-
-        // Wait for the download to complete
-        yield return request.SendWebRequest();
-
-        // Check for errors
-        if (request.result == UnityWebRequest.Result.Success)
-        {
-            Texture2D texture = DownloadHandlerTexture.GetContent(request);
-
-            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), Vector2.zero);
-
-            // Apply the sprite to the target image
-            AboutLogo_Image.sprite = sprite;
-        }
-        else
-        {
-            Debug.LogError("Error downloading image: " + request.error);
+            if (audioController) audioController.MuteUnmute(Sound.Sound, true, true);
         }
     }
 }
