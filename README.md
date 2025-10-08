@@ -1,2 +1,2 @@
 # SlotSpecial-BuffaloTrail
-Build Branch
+Build Branch For Vercel
