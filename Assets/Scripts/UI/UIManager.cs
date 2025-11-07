@@ -63,8 +63,8 @@ public class UIManager : MonoBehaviour
     [Header("Popus UI")]
     [SerializeField]
     private GameObject MainPopup_Object;
-
-
+    [SerializeField]
+    private GameObject WinMainPopup_Object;
 
     [SerializeField]
     private Image AboutLogo_Image;
@@ -463,7 +463,7 @@ public class UIManager : MonoBehaviour
     {
         double initAmount = 0.00;
         if (WinPopup_Object) WinPopup_Object.SetActive(true);
-        if (MainPopup_Object) MainPopup_Object.SetActive(true);
+        if (WinMainPopup_Object) WinMainPopup_Object.SetActive(true);
         float delay = 1.4f;
         float closeDelay = 1.7f;
         if (slotManager.IsTurboOn)
@@ -478,7 +478,7 @@ public class UIManager : MonoBehaviour
 
         ClosePopupTween = DOVirtual.DelayedCall(closeDelay, () =>
         {
-            ClosePopup(WinPopup_Object);
+            CloseWinPopup(WinPopup_Object);
             slotManager.CheckPopups = false;
         });
     }
@@ -613,6 +613,11 @@ public class UIManager : MonoBehaviour
 
     private void OpenPopup(GameObject Popup)
     {
+        if (Popup == LBPopup_Object)
+        {
+            if (PaytablePopup_Object.activeSelf) PaytablePopup_Object.SetActive(false);
+            if (SettingsPopup_Object.activeSelf) SettingsPopup_Object.SetActive(false);
+        }
         if (audioController) audioController.PlayNormalButton();
         if (Popup) Popup.SetActive(true);
         if (MainPopup_Object) MainPopup_Object.SetActive(true);
@@ -625,6 +630,16 @@ public class UIManager : MonoBehaviour
         if (!DisconnectPopup_Object.activeSelf)
         {
             if (MainPopup_Object) MainPopup_Object.SetActive(false);
+        }
+    }
+
+    private void CloseWinPopup(GameObject Popup)
+    {
+        if (audioController) audioController.PlayNormalButton();
+        if (Popup) Popup.SetActive(false);
+        if (!DisconnectPopup_Object.activeSelf)
+        {
+            if (WinMainPopup_Object) WinMainPopup_Object.SetActive(false);
         }
     }
 
