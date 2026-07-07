@@ -1,0 +1,60 @@
+logo.png
+size:4041,2454
+filter:Linear,Linear
+pma:true
+Smoke 029/Smoke 029_00000
+bounds:3814,681,450,225
+rotate:90
+Smoke 029/Smoke 029_00001
+bounds:846,229,450,225
+rotate:90
+Smoke 029/Smoke 029_00002
+bounds:846,2,450,225
+Smoke 029/Smoke 029_00003
+bounds:1073,229,450,225
+rotate:90
+Smoke 029/Smoke 029_00004
+bounds:1298,2,450,225
+Smoke 029/Smoke 029_00005
+bounds:1300,229,450,225
+rotate:90
+Smoke 029/Smoke 029_00006
+bounds:1527,229,450,225
+rotate:90
+Smoke 029/Smoke 029_00007
+bounds:1750,2,450,225
+Smoke 029/Smoke 029_00008
+bounds:1754,229,450,225
+rotate:90
+Smoke 029/Smoke 029_00009
+bounds:1981,229,450,225
+rotate:90
+Smoke 029/Smoke 029_00010
+bounds:2202,2,450,225
+Smoke 029/Smoke 029_00011
+bounds:3805,229,450,225
+rotate:90
+Smoke 029/Smoke 029_00012
+bounds:2654,2,450,225
+Smoke 029/Smoke 029_00013
+bounds:3106,2,450,225
+Smoke 029/Smoke 029_00014
+bounds:3558,2,450,225
+Swipe
+bounds:3981,2357,53,95
+board
+bounds:581,1133,3398,1319
+offsets:1,1,3400,1321
+buffalo
+bounds:2,189,2263,577
+offsets:3,9,2267,603
+rotate:90
+design
+bounds:846,724,2966,407
+horns
+bounds:2208,384,1595,338
+offsets:1,1,1597,340
+trail
+bounds:581,193,938,263
+offsets:1,1,940,265
+rotate:90

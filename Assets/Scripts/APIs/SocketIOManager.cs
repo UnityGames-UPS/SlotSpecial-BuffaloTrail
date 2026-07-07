@@ -36,7 +36,7 @@ public class SocketIOManager : MonoBehaviour
     protected string nameSpace = "playground"; //BackendChanges
     private Socket gameSocket; //BackendChanges
     protected string SocketURI = null;
-    protected string TestSocketURI = "http://localhost:5000";
+    protected string TestSocketURI = "https://devrealtime.dingdinghouse.com";
     [SerializeField] internal JSFunctCalls JSManager;
     [SerializeField] private string testToken;
 

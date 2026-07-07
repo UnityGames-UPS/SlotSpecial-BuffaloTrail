@@ -56,5 +56,5 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "SlotSpecial-BuffaloTrail.sln"
+    "dotnet.defaultSolution": "SlotSpecial-BuffaloTrail.slnx"
 }
