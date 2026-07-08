@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: eb190dd2706c74b92a32374e00591603
+guid: 79871db5593a9406591853c3aa8efff5
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -3883861578681892866
-    second: BlurBG_0
+      213: -3075937048675255047
+    second: topboards_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -126,13 +126,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: BlurBG_0
+      name: topboards_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 3840
-        height: 2160
+        x: 15
+        y: 9
+        width: 440
+        height: 153
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -141,8 +141,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: effb0e5c870c91ac0800000000000000
-      internalID: -3883861578681892866
+      spriteID: 9fc7f3e1d831055d0800000000000000
+      internalID: -3075937048675255047
       vertices: []
       indices: 
       edges: []
@@ -161,7 +161,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      BlurBG_0: -3883861578681892866
+      topboards_0: -3075937048675255047
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

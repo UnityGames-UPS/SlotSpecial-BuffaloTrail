@@ -111,6 +111,19 @@ public class SlotBehaviour : MonoBehaviour
 
   int tweenHeight = 0;  //calculate the height at which tweening is done
 
+  //Reel position + speed model (see Assets/Scripts/MD/REEL_TWEENING_GUIDE.md)
+  private const int RestRowIndex = 6;           //the row the reel settles on (was StopTweening's 'reqpos')
+  private float SpinTopY = 0f;                  //top of the strip: loop start / spawn point
+  private float SpinBottomY => -tweenHeight;    //bottom of the strip: loop exit point
+  //final resting Y where results are shown. Derived from IconSizeFactor (a [SerializeField], 177 in-scene),
+  //never hardcoded — this reproduces the original -(reqpos * IconSizeFactor - IconSizeFactor) + 100.
+  private float RestY => -((RestRowIndex * IconSizeFactor) - IconSizeFactor) + 100;
+  [SerializeField] private float reelSpeed = 2857f;  //reel travel speed in local units/second
+
+  //Duration needed to travel between two Y positions at reelSpeed.
+  private float DurationFor(float fromY, float toY)
+      => Mathf.Abs(toY - fromY) / Mathf.Max(reelSpeed, 0.0001f);
+
   [SerializeField]
   private GameObject Image_Prefab;    //icons prefab
 
@@ -543,11 +556,24 @@ public class SlotBehaviour : MonoBehaviour
       StopSpin_Button.gameObject.SetActive(true);
     }
 
+    //Pre-size the list so each reel's loop tween lands at its own index (filled by the intro callback).
+    alltweens.Clear();
+    for (int i = 0; i < numberOfSlots; i++)
+      alltweens.Add(null);
+
+    List<Tween> introTweens = new();
     for (int i = 0; i < numberOfSlots; i++)
     {
-      InitializeTweening(Slot_Transform[i]);
-      yield return new WaitForSeconds(0.1f);
+      introTweens.Add(InitializeTweening(Slot_Transform[i], i));
+      yield return new WaitForSeconds(0.1f);   //keep the staggered left-to-right wind-up
     }
+
+    //Wait until every reel's intro slide has finished — all loops are now spinning.
+    for (int i = 0; i < introTweens.Count; i++)
+      yield return introTweens[i].WaitForCompletion();
+
+    //Let the reels spin freely for a beat before doing anything else (socket request, etc.).
+    yield return new WaitForSeconds(0.5f);
 
     ResetRectSizes();
 
@@ -597,7 +623,7 @@ public class SlotBehaviour : MonoBehaviour
 
     for (int i = 0; i < numberOfSlots; i++)
     {
-      yield return StopTweening(6, Slot_Transform[i], i, StopSpinToggle);
+      yield return StopTweening(Slot_Transform[i], i, StopSpinToggle);
     }
 
     if (audioController) audioController.PlaySpinAudio(false);
@@ -607,7 +633,16 @@ public class SlotBehaviour : MonoBehaviour
     yield return new WaitForSeconds(0.1f);
 
     StopSpinToggle = false;
-    yield return alltweens[^1].WaitForCompletion();
+
+    //Wait for every landing tween to finish, not just the last one.
+    for (int i = 0; i < numberOfSlots; i++)
+      yield return alltweens[i].WaitForCompletion();
+
+    //Snap to exactly RestY: the OutBack overshoot can leave a column mid-bounce, and the next
+    //spin's intro reads this Y as its start position.
+    for (int i = 0; i < numberOfSlots; i++)
+      Slot_Transform[i].localPosition =
+          new Vector2(Slot_Transform[i].localPosition.x, RestY);
 
     //HACK: Kills The Tweens So That They Will Get Ready For Next Spin
     KillAllTweens();
@@ -1006,20 +1041,44 @@ public class SlotBehaviour : MonoBehaviour
   }
 
   #region TweeningCode
-  private void InitializeTweening(Transform slotTransform)
+  private Tween InitializeTweening(Transform slotTransform, int index)
   {
-    slotTransform.localPosition = new Vector2(slotTransform.localPosition.x, 0);
-    Tweener tweener = slotTransform.DOLocalMoveY(-tweenHeight, 0.2f).SetLoops(-1, LoopType.Restart).SetDelay(0);
-    tweener.Play();
-    alltweens.Add(tweener);
+    Sequence seq = DOTween.Sequence();
+    float startY = slotTransform.localPosition.y;
+
+    //1) One-time intro slide: drop from wherever it is down to the bottom.
+    seq.Append(slotTransform.DOLocalMoveY(SpinBottomY, DurationFor(startY, SpinBottomY))
+        .SetEase(Ease.Linear));
+
+    //2) The instant that finishes, teleport to the top and start the infinite loop.
+    seq.AppendCallback(() =>
+    {
+      slotTransform.localPosition = new Vector2(slotTransform.localPosition.x, SpinTopY);
+
+      Tweener tweener = slotTransform
+          .DOLocalMoveY(SpinBottomY, DurationFor(SpinTopY, SpinBottomY))
+          .SetLoops(-1, LoopType.Restart)   //infinite loop: top -> bottom, snap back to top, repeat
+          .SetEase(Ease.Linear);            //constant speed = seamless scroll
+
+      //Bind by REEL INDEX, never by completion order, so StopTweening/KillAllTweens
+      //always act on the reel they were handed.
+      alltweens[index] = tweener;
+    });
+
+    return seq; //caller waits on this to know the intro is done
   }
 
-  private IEnumerator StopTweening(int reqpos, Transform slotTransform, int index, bool isStop)
+  private IEnumerator StopTweening(Transform slotTransform, int index, bool isStop)
   {
-    alltweens[index].Pause();
-    int tweenpos = (reqpos * IconSizeFactor) - IconSizeFactor;
-    slotTransform.localPosition = new Vector2(slotTransform.localPosition.x, 0);
-    alltweens[index] = slotTransform.DOLocalMoveY(-tweenpos + 100, 0.5f).SetEase(Ease.OutElastic);
+    alltweens[index]?.Kill();  //stop the infinite loop
+
+    //Teleport to the top so the landing slide always covers the full window (consistent feel).
+    slotTransform.localPosition = new Vector2(slotTransform.localPosition.x, SpinTopY);
+
+    //Replace the loop entry with the landing tween so callers can await alltweens[index].
+    alltweens[index] = slotTransform.DOLocalMoveY(RestY, DurationFor(SpinTopY, RestY))
+        .SetEase(Ease.OutBack, 0.9f);  //overshoot then settle onto RestY
+
     if (!isStop)
     {
       yield return new WaitForSeconds(0.2f);
@@ -1032,9 +1091,9 @@ public class SlotBehaviour : MonoBehaviour
 
   private void KillAllTweens()
   {
-    for (int i = 0; i < numberOfSlots; i++)
+    for (int i = 0; i < alltweens.Count; i++)
     {
-      alltweens[i].Kill();
+      alltweens[i]?.Kill();
     }
     alltweens.Clear();
 
