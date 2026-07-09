@@ -117,7 +117,7 @@ public class SlotBehaviour : MonoBehaviour
   private float SpinBottomY => -tweenHeight;    //bottom of the strip: loop exit point
   //final resting Y where results are shown. Derived from IconSizeFactor (a [SerializeField], 177 in-scene),
   //never hardcoded — this reproduces the original -(reqpos * IconSizeFactor - IconSizeFactor) + 100.
-  private float RestY => -((RestRowIndex * IconSizeFactor) - IconSizeFactor) + 100;
+  [SerializeField] private float RestY;
   [SerializeField] private float reelSpeed = 2857f;  //reel travel speed in local units/second
 
   //Duration needed to travel between two Y positions at reelSpeed.
@@ -555,6 +555,10 @@ public class SlotBehaviour : MonoBehaviour
     {
       StopSpin_Button.gameObject.SetActive(true);
     }
+    if (!IsFreeSpin)
+    {
+      BalanceDeduction();
+    }
 
     //Pre-size the list so each reel's loop tween lands at its own index (filled by the intro callback).
     alltweens.Clear();
@@ -565,7 +569,7 @@ public class SlotBehaviour : MonoBehaviour
     for (int i = 0; i < numberOfSlots; i++)
     {
       introTweens.Add(InitializeTweening(Slot_Transform[i], i));
-      yield return new WaitForSeconds(0.1f);   //keep the staggered left-to-right wind-up
+      // yield return new WaitForSeconds(0.f);   //keep the staggered left-to-right wind-up
     }
 
     //Wait until every reel's intro slide has finished — all loops are now spinning.
@@ -576,11 +580,6 @@ public class SlotBehaviour : MonoBehaviour
     yield return new WaitForSeconds(0.5f);
 
     ResetRectSizes();
-
-    if (!IsFreeSpin)
-    {
-      BalanceDeduction();
-    }
 
     //HACK: This will be used when to send the spin instruction to the socket and wait for the socket to receive the request.
     SocketManager.AccumulateResult(BetCounter);
@@ -616,14 +615,13 @@ public class SlotBehaviour : MonoBehaviour
         }
         yield return new WaitForSeconds(0.1f);
       }
-      StopSpin_Button.gameObject.SetActive(false);
     }
 
     PrioritizeList();
 
     for (int i = 0; i < numberOfSlots; i++)
     {
-      yield return StopTweening(Slot_Transform[i], i, StopSpinToggle);
+      yield return StopTweening(Slot_Transform[i], i, StopSpinToggle || IsTurboOn);
     }
 
     if (audioController) audioController.PlaySpinAudio(false);
@@ -1037,7 +1035,6 @@ public class SlotBehaviour : MonoBehaviour
     {
       i.current_object.SetAsLastSibling();
     }
-
   }
 
   #region TweeningCode
@@ -1048,7 +1045,7 @@ public class SlotBehaviour : MonoBehaviour
 
     //1) One-time intro slide: drop from wherever it is down to the bottom.
     seq.Append(slotTransform.DOLocalMoveY(SpinBottomY, DurationFor(startY, SpinBottomY))
-        .SetEase(Ease.Linear));
+        .SetEase(Ease.InBack));
 
     //2) The instant that finishes, teleport to the top and start the infinite loop.
     seq.AppendCallback(() =>
@@ -1077,11 +1074,11 @@ public class SlotBehaviour : MonoBehaviour
 
     //Replace the loop entry with the landing tween so callers can await alltweens[index].
     alltweens[index] = slotTransform.DOLocalMoveY(RestY, DurationFor(SpinTopY, RestY))
-        .SetEase(Ease.OutBack, 0.9f);  //overshoot then settle onto RestY
+        .SetEase(Ease.OutBack, 1.2f);  //overshoot then settle onto RestY
 
     if (!isStop)
     {
-      yield return new WaitForSeconds(0.2f);
+      yield return new WaitForSeconds(0.4f);
     }
     else
     {
