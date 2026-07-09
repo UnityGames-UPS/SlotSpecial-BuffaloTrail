@@ -127,6 +127,16 @@ public class ImageAnimation : MonoBehaviour
 		SetTextureOfIndex();
 	}
 
+	//Duration of one full frame-sequence play (no loop delay), for callers that need to
+	//synchronize other effects to the animation length.
+	public float GetSequenceDuration()
+	{
+		if (textureArray == null || textureArray.Count == 0 || AnimationSpeed == 0f)
+			return 0f;
+		float perFrame = idealFrameRate * (float)textureArray.Count / AnimationSpeed;
+		return perFrame * textureArray.Count;
+	}
+
 	private void SetTextureOfIndex()
 	{
 		if (useSharedMaterial)

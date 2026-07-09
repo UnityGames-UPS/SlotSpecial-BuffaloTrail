@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
-using Unity.VisualScripting;
+using TMPro;
 
 public class AnimationController : MonoBehaviour
 {
@@ -11,94 +11,348 @@ public class AnimationController : MonoBehaviour
     [SerializeField]
     internal List<SlotImage> m_AnimatedSlots = new List<SlotImage>();
     [SerializeField]
-    //private List<AnimCords> m_Cords;
-    private List<List<List<int>>> m_Cords = new List<List<List<int>>>();
-    [SerializeField]
     private SlotBehaviour m_SlotBehaviour;
     [SerializeField]
     private SocketIOManager SocketManager;
 
-    private Coroutine m_AnimationRoutine;
-    private List<Tweener> m_SlotsAnim = new List<Tweener>();
-    private bool m_PlayingAnimation = false;
+    [Header("Win-line timing")]
+    [SerializeField]
+    private float m_BetweenLineDelay = 0.25f;   //black-overlay-only gap between plays
+    [SerializeField]
+    private float m_NoAnimLineDuration = 2f;     //per-line duration when no symbol has a frame sequence
+    [SerializeField]
+    private float m_PulseScale = 1.15f;          //scale-pulse peak for symbols without frame sequences
 
-    internal void StartAnimation(List<WinningCombination> winningCombinations)
+    [Header("Per-symbol overlay Y offset")]
+    [SerializeField]
+    //Y nudge applied to a symbol's overlay while it animates (e.g. wolf id 9 => -23, bear id 8 => -5).
+    private List<SymbolYOffset> m_SymbolYOffsets = new List<SymbolYOffset>
     {
-        List<List<int>> allPositions = new List<List<int>>();
-        foreach (var combo in winningCombinations)
+        new SymbolYOffset { symbolId = 9, yOffset = -23f },
+        new SymbolYOffset { symbolId = 8, yOffset = -5f },
+    };
+
+    private Coroutine m_WinRoutine;
+    //cells currently nudged -> the exact offset applied, so it's undone once and can never drift
+    private Dictionary<(int col, int row), float> m_OffsetCells = new Dictionary<(int, int), float>();
+    //per-cell one-shot highlight tweens (scale pulses), so a single line can be reset in isolation
+    private Dictionary<(int col, int row), Tween> m_SlotsAnim = new Dictionary<(int, int), Tween>();
+    //cached per-cell payout labels (child 0) and frame animators
+    private List<List<TMP_Text>> m_WinLabels = new List<List<TMP_Text>>();
+    private List<List<ImageAnimation>> m_CellAnim = new List<List<ImageAnimation>>();
+
+    private void Awake()
+    {
+        //Cache the per-cell labels and frame animators once. m_AnimatedSlots is a [SerializeField]
+        //list, so it is already populated by the time Awake runs.
+        m_WinLabels.Clear();
+        m_CellAnim.Clear();
+        for (int c = 0; c < m_AnimatedSlots.Count; c++)
         {
-            if (combo.positions != null)
-                allPositions.AddRange(combo.positions);
+            var labelCol = new List<TMP_Text>();
+            var animCol = new List<ImageAnimation>();
+            for (int r = 0; r < m_AnimatedSlots[c].slotImages.Count; r++)
+            {
+                var cell = m_AnimatedSlots[c].slotImages[r];
+
+                TMP_Text label = null;
+                if (cell != null && cell.transform.childCount > 0)
+                    label = cell.transform.GetChild(0).GetComponent<TMP_Text>();
+                labelCol.Add(label);
+
+                ImageAnimation anim = cell != null ? cell.GetComponent<ImageAnimation>() : null;
+                if (anim != null)
+                    anim.doLoopAnimation = false;   //win highlights play their sequence once, not looped
+                animCol.Add(anim);
+            }
+            m_WinLabels.Add(labelCol);
+            m_CellAnim.Add(animCol);
         }
+    }
 
-        if (m_AnimationRoutine != null)
-            StopCoroutine(m_AnimationRoutine);
+    internal void StartAnimation(List<WinningCombination> combos, bool autoContinued)
+    {
+        StopAnimation();
+        if (combos == null || combos.Count == 0) return;
 
-        m_AnimationRoutine = StartCoroutine(ActivateAllAnimation(allPositions));
+        m_WinRoutine = StartCoroutine(AnimateLineWins(combos, autoContinued));
     }
 
     internal void StopAnimation()
     {
-        m_PlayingAnimation = false;
+        //Order matters: stop the loop first, then reset, so the loop can't spawn one more
+        //iteration on the frame between the two calls.
+        if (m_WinRoutine != null)
+        {
+            StopCoroutine(m_WinRoutine);
+            m_WinRoutine = null;
+        }
         ResetAnimatedView();
-        if (m_AnimationRoutine != null)
-            StopCoroutine(m_AnimationRoutine);
-        m_AnimationRoutine = null;
-
-        m_Cords.Clear();
-        m_Cords.TrimExcess();
     }
 
-    private IEnumerator ActivateAllAnimation(List<List<int>> symbolPositions)
+    private IEnumerator AnimateLineWins(List<WinningCombination> combos, bool autoContinued)
     {
-        m_PlayingAnimation = true;
+        m_ParentSlotsHolder.gameObject.SetActive(true);   //dim on (dark image + overlay layer)
 
-        while (m_PlayingAnimation)
+        bool singleLine = combos.Count == 1;
+
+        //Synced pass: every winning symbol (deduped) plays its sequence once, together.
+        float syncedDuration = PlaySyncedPass(combos, showPayouts: singleLine && !autoContinued);
+        yield return new WaitForSecondsRealtime(syncedDuration);
+
+        //Auto / free / feature-triggered chains: one pass, then clear so the chain can advance.
+        if (autoContinued)
         {
-            foreach (var pos in symbolPositions)
-            {
-                if (pos.Count < 2) continue;
-                ActivateAnimatedView(pos[0], pos[1]);
-            }
-
-            yield return new WaitForSeconds(1f);
             ResetAnimatedView();
+            yield break;
+        }
 
-            yield return new WaitForSeconds(0.5f);
+        //Turn everything off (only the black overlay shows), then cycle the lines one at a time.
+        //A single line simply cycles on itself: play once -> off for a beat -> play again.
+        ResetAllLines(combos);
+        while (true)
+        {
+            foreach (var combo in combos)
+            {
+                yield return new WaitForSecondsRealtime(m_BetweenLineDelay);
+                float dur = PlayLine(combo, showPayouts: true);
+                yield return new WaitForSecondsRealtime(dur);
+                ResetLine(combo);
+            }
         }
     }
 
-    // private IEnumerator PlayWinSequence(List<WinningCombination> winningCombinations)
-    // {
-    //     m_PlayingAnimation = true;
+    private float PlaySyncedPass(List<WinningCombination> combos, bool showPayouts)
+    {
+        //Map each line's last symbol to its payout (only when we show labels).
+        var lastPayout = new Dictionary<(int, int), double>();
+        if (showPayouts)
+        {
+            foreach (var combo in combos)
+            {
+                if (combo.positions == null || combo.positions.Count == 0) continue;
+                if (!TryCell(combo.positions[combo.positions.Count - 1], out int lc, out int lr)) continue;
+                lastPayout[(lc, lr)] = combo.payout;
+            }
+        }
 
-    //     foreach (var combo in winningCombinations)
-    //     {
+        //Collect the deduped set of cells first, so the group duration covers all of them.
+        var cells = new List<(int col, int row)>();
+        var seen = new HashSet<(int, int)>();
+        foreach (var combo in combos)
+        {
+            if (combo.positions == null) continue;
+            foreach (var pos in combo.positions)
+            {
+                if (!TryCell(pos, out int col, out int row)) continue;
+                if (!seen.Add((col, row))) continue;   //a symbol on N lines plays once
+                cells.Add((col, row));
+            }
+        }
 
-    //         yield return StartCoroutine(AnimateCombo(combo));
-    //         ResetAnimatedView();
-    //         yield return new WaitForSeconds(0.3f);
-    //     }
+        float duration = ComputeGroupDuration(cells);
+        foreach (var (col, row) in cells)
+        {
+            bool show = lastPayout.TryGetValue((col, row), out double payout);
+            LightCell(col, row, show, show ? payout : 0, duration);
+        }
+        return duration;
+    }
 
-    //     yield return new WaitForSeconds(1.5f);
-    //     m_PlayingAnimation = false;
-    // }
+    private float PlayLine(WinningCombination combo, bool showPayouts)
+    {
+        if (combo.positions == null) return m_NoAnimLineDuration;
 
-    // private IEnumerator AnimateCombo(WinningCombination combo)
-    // {
-    //     // Highlight each symbol in the current winning combination
-    //     foreach (var pos in combo.positions)
-    //     {
-    //         if (pos.Count < 2) continue;
+        var cells = new List<(int col, int row)>();
+        foreach (var pos in combo.positions)
+            if (TryCell(pos, out int col, out int row))
+                cells.Add((col, row));
 
-    //         int col = pos[0];
-    //         int row = pos[1];
+        float duration = ComputeGroupDuration(cells);
+        int last = combo.positions.Count - 1;
+        for (int i = 0; i < combo.positions.Count; i++)
+        {
+            if (!TryCell(combo.positions[i], out int col, out int row)) continue;
+            bool show = showPayouts && (i == last);
+            LightCell(col, row, show, show ? combo.payout : 0, duration);
+        }
+        return duration;
+    }
 
-    //         ActivateAnimatedView(col, row);
+    private void ResetLine(WinningCombination combo)
+    {
+        if (combo.positions == null) return;
+        for (int i = 0; i < combo.positions.Count; i++)   //iterate full positions, matching the play loop
+        {
+            if (!TryCell(combo.positions[i], out int col, out int row)) continue;
+            ResetCell(col, row);
+        }
+    }
 
-    //     }
-    //     yield return new WaitForSeconds(1.2f);
-    // }
+    private void ResetAllLines(List<WinningCombination> combos)
+    {
+        foreach (var combo in combos)
+            ResetLine(combo);
+    }
+
+    //Longest one-shot animation in the group. Frame symbols use their sequence length; symbols
+    //without frames are pulsed over this same duration so the whole group finishes together.
+    //If no symbol in the group has a frame sequence, fall back to the inspector duration.
+    private float ComputeGroupDuration(List<(int col, int row)> cells)
+    {
+        float maxFrames = 0f;
+        bool anyFrames = false;
+        foreach (var (col, row) in cells)
+        {
+            var anim = m_CellAnim[col][row];
+            if (anim != null && anim.textureArray != null && anim.textureArray.Count > 0)
+            {
+                anyFrames = true;
+                maxFrames = Mathf.Max(maxFrames, anim.GetSequenceDuration());
+            }
+        }
+        return anyFrames ? maxFrames : m_NoAnimLineDuration;
+    }
+
+    private void LightCell(int col, int row, bool showPayout, double payout, float duration)
+    {
+        if (!m_ParentSlotsHolder.gameObject.activeSelf)
+            m_ParentSlotsHolder.gameObject.SetActive(true);
+
+        var cell = m_AnimatedSlots[col].slotImages[row];
+        cell.gameObject.SetActive(true);
+        m_SlotBehaviour.Tempimages[col].slotImages[row].gameObject.SetActive(false);
+
+        //Nudge certain symbols' overlay so their frame sits correctly; the exact amount is tracked so
+        //it's undone once on reset and can never drift across iterations.
+        if (!m_OffsetCells.ContainsKey((col, row)))
+        {
+            float yOff = GetYOffset(GetSymbolId(col, row));
+            if (yOff != 0f)
+            {
+                cell.transform.localPosition += new Vector3(0f, yOff, 0f);
+                m_OffsetCells[(col, row)] = yOff;
+            }
+        }
+
+        var anim = m_CellAnim[col][row];
+        if (anim != null && anim.textureArray != null && anim.textureArray.Count > 0)
+        {
+            anim.StopAnimation();    //force back to NONE so StartAnimation replays from frame 0
+            anim.StartAnimation();
+        }
+        else
+        {
+            //One up/down scale pulse spanning the group's duration, so frameless symbols stay in
+            //time with the frame-animated ones.
+            if (m_SlotsAnim.TryGetValue((col, row), out var existing))
+                existing.Kill();
+
+            var rt = cell.GetComponent<RectTransform>();
+            rt.localScale = Vector3.one;
+            var seq = DOTween.Sequence().SetUpdate(true);
+            seq.Append(rt.DOScale(m_PulseScale, duration * 0.5f).SetEase(Ease.OutSine));
+            seq.Append(rt.DOScale(1f, duration * 0.5f).SetEase(Ease.InSine));
+            m_SlotsAnim[(col, row)] = seq;
+        }
+
+        var label = m_WinLabels[col][row];
+        if (showPayout && label != null)
+        {
+            label.gameObject.SetActive(true);
+            label.text = FormatPayout(payout);
+        }
+    }
+
+    private void ResetCell(int col, int row)
+    {
+        var cell = m_AnimatedSlots[col].slotImages[row];
+        cell.gameObject.SetActive(false);
+        m_SlotBehaviour.Tempimages[col].slotImages[row].gameObject.SetActive(true);
+
+        //Undo the overlay nudge exactly once, by the exact amount applied, so positions never drift.
+        if (m_OffsetCells.TryGetValue((col, row), out float yOff))
+        {
+            cell.transform.localPosition -= new Vector3(0f, yOff, 0f);
+            m_OffsetCells.Remove((col, row));
+        }
+
+        var anim = m_CellAnim[col][row];
+        if (anim != null && anim.textureArray != null && anim.textureArray.Count > 0)
+            anim.StopAnimation();
+        else
+            cell.transform.localScale = Vector3.one;
+
+        if (m_SlotsAnim.TryGetValue((col, row), out var tween))
+        {
+            tween.Kill();
+            m_SlotsAnim.Remove((col, row));
+        }
+
+        var label = m_WinLabels[col][row];
+        if (label != null)
+            label.gameObject.SetActive(false);
+    }
+
+    private void ResetAnimatedView()
+    {
+        for (int c = 0; c < m_AnimatedSlots.Count; c++)
+            for (int r = 0; r < m_AnimatedSlots[c].slotImages.Count; r++)
+                ResetCell(c, r);
+
+        foreach (var kvp in m_SlotsAnim)
+            kvp.Value.Kill();
+        m_SlotsAnim.Clear();
+        m_OffsetCells.Clear();
+
+        m_ParentSlotsHolder.gameObject.SetActive(false);   //instant dim clear (no fade)
+    }
+
+    //Normalize a server position into (col, row). The wire format is [row, col] but every access
+    //in this codebase indexes layer[pos[1]].slotImages[pos[0]] — preserve that exactly.
+    private bool TryCell(List<int> pos, out int col, out int row)
+    {
+        col = 0; row = 0;
+        if (pos == null || pos.Count < 2) return false;
+        col = pos[1];
+        row = pos[0];
+        if (col < 0 || col >= m_AnimatedSlots.Count) return false;
+        if (row < 0 || row >= m_AnimatedSlots[col].slotImages.Count) return false;
+        return true;
+    }
+
+    //Configured Y nudge for a symbol id (0 if none).
+    private float GetYOffset(int symbolId)
+    {
+        for (int i = 0; i < m_SymbolYOffsets.Count; i++)
+            if (m_SymbolYOffsets[i].symbolId == symbolId)
+                return m_SymbolYOffsets[i].yOffset;
+        return 0f;
+    }
+
+    //Symbol id landed on a cell, read from the server result matrix (indexed [row][col], as in
+    //SlotBehaviour). Returns -1 if unavailable.
+    private int GetSymbolId(int col, int row)
+    {
+        var matrix = SocketManager != null && SocketManager.resultData != null
+            ? SocketManager.resultData.matrix : null;
+        if (matrix == null || row < 0 || row >= matrix.Count) return -1;
+        var r = matrix[row];
+        if (r == null || col < 0 || col >= r.Count) return -1;
+        return int.TryParse(r[col], out int id) ? id : -1;
+    }
+
+    private static string FormatPayout(double value)
+    {
+        return value.ToString("0.###");
+    }
+
+    [System.Serializable]
+    public struct SymbolYOffset
+    {
+        public int symbolId;
+        public float yOffset;
+    }
 
     internal void FreeSpinCoinAnimate()
     {
@@ -117,60 +371,4 @@ public class AnimationController : MonoBehaviour
             }
         }
     }
-
-    private void ActivateAnimatedView(int j, int i)
-    {
-        if (!m_ParentSlotsHolder.gameObject.activeSelf)
-        {
-            ResetAnimatedView();
-            m_ParentSlotsHolder.gameObject.SetActive(true);
-        }
-        m_AnimatedSlots[i].slotImages[j].gameObject.SetActive(true);
-        m_SlotBehaviour.Tempimages[i].slotImages[j].gameObject.SetActive(false);
-        //m_AnimatedSlots[i].slotImages[j].transform.DOScale(1.2f, 1);
-        if (m_AnimatedSlots[i].slotImages[j].gameObject.GetComponent<ImageAnimation>().textureArray.Count > 0)
-            m_AnimatedSlots[i].slotImages[j].gameObject.GetComponent<ImageAnimation>().StartAnimation();
-        else
-        {
-            var tween = m_AnimatedSlots[i].slotImages[j].gameObject.GetComponent<RectTransform>().DOScale(new Vector2(1.15f, 1.15f), .8f).SetLoops(-1, LoopType.Yoyo).SetDelay(0);
-            tween.Play();
-            m_SlotsAnim.Add(tween);
-        }
-    }
-
-    private void ResetAnimatedView()
-    {
-        for (int i = 0; i < m_AnimatedSlots.Count; i++)
-        {
-            for (int j = 0; j < m_AnimatedSlots[i].slotImages.Count; j++)
-            {
-                m_AnimatedSlots[i].slotImages[j].gameObject.SetActive(false);
-                m_SlotBehaviour.Tempimages[i].slotImages[j].gameObject.SetActive(true);
-                if (m_AnimatedSlots[i].slotImages[j].gameObject.GetComponent<ImageAnimation>().textureArray.Count > 0)
-                    m_AnimatedSlots[i].slotImages[j].gameObject.GetComponent<ImageAnimation>().StopAnimation();
-                else
-                    m_AnimatedSlots[i].slotImages[j].transform.localScale = new Vector3(1, 1, 1);
-            }
-        }
-        foreach (var i in m_SlotsAnim)
-        {
-            i.Kill();
-        }
-        m_SlotsAnim.Clear();
-        m_SlotsAnim.TrimExcess();
-        m_ParentSlotsHolder.gameObject.SetActive(false);
-    }
-}
-
-[System.Serializable]
-public struct Cord
-{
-    public int i;
-    public int j;
-}
-
-[System.Serializable]
-public struct AnimCords
-{
-    public List<Cord> m_Cords;
 }

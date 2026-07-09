@@ -428,10 +428,8 @@ public class SlotBehaviour : MonoBehaviour
     if (Balance_text) Balance_text.text = SocketManager.playerdata.balance.ToString("f3");
     currentBalance = SocketManager.playerdata.balance;
     currentTotalBet = SocketManager.initialData.bets[BetCounter];
-    //_bonusManager.PopulateWheel(SocketManager.bonusdata);
     CompareBalance();
     uiManager.AssignBetButtons(SocketManager.initialData.bets);
-    // uiManager.InitialiseUIData(SocketManager.initUIData.AbtLogo.link, SocketManager.initUIData.AbtLogo.logoSprite, SocketManager.initUIData.ToULink, SocketManager.initUIData.PopLink, SocketManager.initUIData.paylines);
   }
   #endregion
 
@@ -453,42 +451,42 @@ public class SlotBehaviour : MonoBehaviour
         {
           animScript.textureArray.Add(Cat_Sprite[i]);
         }
-        animScript.AnimationSpeed = 60f;
+        animScript.AnimationSpeed = 63f;
         break;
       case 7:
         for (int i = 0; i < Eagle_Sprite.Length; i++)
         {
           animScript.textureArray.Add(Eagle_Sprite[i]);
         }
-        animScript.AnimationSpeed = 60f;
+        animScript.AnimationSpeed = 62f;
         break;
       case 8:
         for (int i = 0; i < Bear_Sprite.Length; i++)
         {
           animScript.textureArray.Add(Bear_Sprite[i]);
         }
-        animScript.AnimationSpeed = 30f;
+        animScript.AnimationSpeed = 32f;
         break;
       case 9:
         for (int i = 0; i < Wolf_Sprite.Length; i++)
         {
           animScript.textureArray.Add(Wolf_Sprite[i]);
         }
-        animScript.AnimationSpeed = 60f;
+        animScript.AnimationSpeed = 63f;
         break;
       case 10:
         for (int i = 0; i < Buffalo_Sprite.Length; i++)
         {
           animScript.textureArray.Add(Buffalo_Sprite[i]);
         }
-        animScript.AnimationSpeed = 40f;
+        animScript.AnimationSpeed = 42f;
         break;
       case 11:
         for (int i = 0; i < Landscape_Sprite.Length; i++)
         {
           animScript.textureArray.Add(Landscape_Sprite[i]);
         }
-        animScript.AnimationSpeed = 60f;
+        animScript.AnimationSpeed = 63f;
         break;
       case 12:
         for (int i = 0; i < Gold_Buffalo.Length; i++)
@@ -625,16 +623,14 @@ public class SlotBehaviour : MonoBehaviour
     }
 
     if (audioController) audioController.PlaySpinAudio(false);
-
-    m_MainUIMask.enabled = false;
-
-    yield return new WaitForSeconds(0.1f);
-
-    StopSpinToggle = false;
-
     //Wait for every landing tween to finish, not just the last one.
     for (int i = 0; i < numberOfSlots; i++)
       yield return alltweens[i].WaitForCompletion();
+
+    StopSpin_Button.gameObject.SetActive(false);
+    m_MainUIMask.enabled = false;
+    yield return new WaitForSeconds(0.1f);
+    StopSpinToggle = false;
 
     //Snap to exactly RestY: the OutBack overshoot can leave a column mid-bounce, and the next
     //spin's intro reads this Y as its start position.
@@ -663,7 +659,9 @@ public class SlotBehaviour : MonoBehaviour
     TotalWin_text.text = m_Instructions[0];
 
     //HACK: Check For The Result And Activate Animations Accordingly
-    m_AnimationController.StartAnimation(SocketManager.resultData.payload.winningCombinations);
+    //Auto/free/feature spins get one synced pass then clear (no infinite cycle); manual spins loop.
+    bool autoContinued = IsAutoSpin || IsFreeSpin || SocketManager.resultData.features.freeSpin.isTriggered;
+    m_AnimationController.StartAnimation(SocketManager.resultData.payload.winningCombinations, autoContinued);
 
     // if (SocketManager.resultData.features.freeSpin.wildMultiplier.Count > 0)
     // {
