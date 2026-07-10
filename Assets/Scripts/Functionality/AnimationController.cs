@@ -14,6 +14,11 @@ public class AnimationController : MonoBehaviour
     private SlotBehaviour m_SlotBehaviour;
     [SerializeField]
     private SocketIOManager SocketManager;
+    [SerializeField]
+    //Top-level transform (sits above the outside-slot UI in the canvas hierarchy) that a cell is
+    //reparented into while its win animation plays, since SetAsLastSibling only reorders within a
+    //parent and can't draw over sibling hierarchies.
+    private Transform m_AnimOverlayParent;
 
     [Header("Win-line timing")]
     [SerializeField]
@@ -33,24 +38,35 @@ public class AnimationController : MonoBehaviour
     };
 
     private Coroutine m_WinRoutine;
-    //cells currently nudged -> the exact offset applied, so it's undone once and can never drift
+    //guards against re-applying the Y-offset nudge if a cell is lit twice before it's reset
     private Dictionary<(int col, int row), float> m_OffsetCells = new Dictionary<(int, int), float>();
     //per-cell one-shot highlight tweens (scale pulses), so a single line can be reset in isolation
     private Dictionary<(int col, int row), Tween> m_SlotsAnim = new Dictionary<(int, int), Tween>();
     //cached per-cell payout labels (child 0) and frame animators
     private List<List<TMP_Text>> m_WinLabels = new List<List<TMP_Text>>();
     private List<List<ImageAnimation>> m_CellAnim = new List<List<ImageAnimation>>();
+    //cached per-cell home transform (captured once in Awake, before anything moves), so a cell
+    //pulled into m_AnimOverlayParent can be put back exactly where it started
+    private List<List<Transform>> m_HomeParent = new List<List<Transform>>();
+    private List<List<int>> m_HomeSiblingIndex = new List<List<int>>();
+    private List<List<Vector3>> m_HomeLocalPosition = new List<List<Vector3>>();
 
     private void Awake()
     {
-        //Cache the per-cell labels and frame animators once. m_AnimatedSlots is a [SerializeField]
-        //list, so it is already populated by the time Awake runs.
+        //Cache the per-cell labels, frame animators, and home transform once. m_AnimatedSlots is a
+        //[SerializeField] list, so it is already populated by the time Awake runs.
         m_WinLabels.Clear();
         m_CellAnim.Clear();
+        m_HomeParent.Clear();
+        m_HomeSiblingIndex.Clear();
+        m_HomeLocalPosition.Clear();
         for (int c = 0; c < m_AnimatedSlots.Count; c++)
         {
             var labelCol = new List<TMP_Text>();
             var animCol = new List<ImageAnimation>();
+            var parentCol = new List<Transform>();
+            var siblingCol = new List<int>();
+            var posCol = new List<Vector3>();
             for (int r = 0; r < m_AnimatedSlots[c].slotImages.Count; r++)
             {
                 var cell = m_AnimatedSlots[c].slotImages[r];
@@ -64,9 +80,16 @@ public class AnimationController : MonoBehaviour
                 if (anim != null)
                     anim.doLoopAnimation = false;   //win highlights play their sequence once, not looped
                 animCol.Add(anim);
+
+                parentCol.Add(cell != null ? cell.transform.parent : null);
+                siblingCol.Add(cell != null ? cell.transform.GetSiblingIndex() : -1);
+                posCol.Add(cell != null ? cell.transform.localPosition : Vector3.zero);
             }
             m_WinLabels.Add(labelCol);
             m_CellAnim.Add(animCol);
+            m_HomeParent.Add(parentCol);
+            m_HomeSiblingIndex.Add(siblingCol);
+            m_HomeLocalPosition.Add(posCol);
         }
     }
 
@@ -78,6 +101,10 @@ public class AnimationController : MonoBehaviour
         m_WinRoutine = StartCoroutine(AnimateLineWins(combos, autoContinued));
     }
 
+    //True while the opening synced pass is still playing. Chained spins (auto/free) poll this so a
+    //win that triggers no banner still gets one full animation cycle before the next spin starts.
+    internal bool IsWinPassPlaying { get; private set; }
+
     internal void StopAnimation()
     {
         //Order matters: stop the loop first, then reset, so the loop can't spawn one more
@@ -87,6 +114,7 @@ public class AnimationController : MonoBehaviour
             StopCoroutine(m_WinRoutine);
             m_WinRoutine = null;
         }
+        IsWinPassPlaying = false;   //the pass can't outlive the routine that drives it
         ResetAnimatedView();
     }
 
@@ -97,8 +125,10 @@ public class AnimationController : MonoBehaviour
         bool singleLine = combos.Count == 1;
 
         //Synced pass: every winning symbol (deduped) plays its sequence once, together.
+        IsWinPassPlaying = true;
         float syncedDuration = PlaySyncedPass(combos, showPayouts: singleLine && !autoContinued);
         yield return new WaitForSecondsRealtime(syncedDuration);
+        IsWinPassPlaying = false;
 
         //Auto / free / feature-triggered chains: one pass, then clear so the chain can advance.
         if (autoContinued)
@@ -223,6 +253,10 @@ public class AnimationController : MonoBehaviour
         cell.gameObject.SetActive(true);
         m_SlotBehaviour.Tempimages[col].slotImages[row].gameObject.SetActive(false);
 
+        //Pull the cell into the overlay parent (worldPositionStays: true keeps its visual spot) so it
+        //draws above the outside-slot UI, which SetAsLastSibling alone can never do across parents.
+        cell.transform.SetParent(m_AnimOverlayParent, true);
+
         //Nudge certain symbols' overlay so their frame sits correctly; the exact amount is tracked so
         //it's undone once on reset and can never drift across iterations.
         if (!m_OffsetCells.ContainsKey((col, row)))
@@ -270,12 +304,12 @@ public class AnimationController : MonoBehaviour
         cell.gameObject.SetActive(false);
         m_SlotBehaviour.Tempimages[col].slotImages[row].gameObject.SetActive(true);
 
-        //Undo the overlay nudge exactly once, by the exact amount applied, so positions never drift.
-        if (m_OffsetCells.TryGetValue((col, row), out float yOff))
-        {
-            cell.transform.localPosition -= new Vector3(0f, yOff, 0f);
-            m_OffsetCells.Remove((col, row));
-        }
+        //Return the cell to its cached home parent/sibling-index/local-position exactly, which also
+        //undoes the Y-offset nudge and the overlay reparent in one shot (no drift across iterations).
+        cell.transform.SetParent(m_HomeParent[col][row], false);
+        cell.transform.SetSiblingIndex(m_HomeSiblingIndex[col][row]);
+        cell.transform.localPosition = m_HomeLocalPosition[col][row];
+        m_OffsetCells.Remove((col, row));
 
         var anim = m_CellAnim[col][row];
         if (anim != null && anim.textureArray != null && anim.textureArray.Count > 0)

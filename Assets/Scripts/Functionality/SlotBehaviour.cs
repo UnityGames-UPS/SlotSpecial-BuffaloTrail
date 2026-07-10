@@ -64,6 +64,8 @@ public class SlotBehaviour : MonoBehaviour
 
   private bool StopSpinToggle;
   private float SpinDelay = 0.2f;
+  [SerializeField] private float postWinBannerDelay = 0.35f;  //breath between the banner clearing and the next chained spin
+  [SerializeField] private float noWinSpinDelay = 0.2f;
   internal bool IsTurboOn;
   private bool WasAutoSpinOn;
 
@@ -127,9 +129,6 @@ public class SlotBehaviour : MonoBehaviour
   [SerializeField]
   private GameObject Image_Prefab;    //icons prefab
 
-  [SerializeField]
-  private PayoutCalculation PayCalculator;
-
   private List<Tweener> alltweens = new List<Tweener>();
 
   private Tweener WinTween = null;
@@ -154,7 +153,6 @@ public class SlotBehaviour : MonoBehaviour
   private bool IsFreeSpin = false;
   private bool IsSpinning = false;
   private bool CheckSpinAudio = false;
-  internal bool CheckPopups = false;
 
   private int BetCounter = 0;
   private double currentBalance = 0;
@@ -284,6 +282,10 @@ public class SlotBehaviour : MonoBehaviour
     {
       StartSlots(IsAutoSpin);
       yield return tweenroutine;
+      //Chained modes let the celebration play out; the next StartSlots then resets it. With no banner
+      //the symbol pass is the only celebration, so wait for it too or it gets cut off instantly.
+      yield return new WaitWhile(() => uiManager.isWinAnimating || m_AnimationController.IsWinPassPlaying);
+      if (!IsAutoSpin) break;
       yield return new WaitForSeconds(SpinDelay);
     }
     WasAutoSpinOn = false;
@@ -293,15 +295,17 @@ public class SlotBehaviour : MonoBehaviour
   {
     yield return new WaitUntil(() => !IsSpinning);
     ToggleButtonGrp(true);
-    if (AutoSpinRoutine != null || tweenroutine != null)
+    //Independent null checks: the handles are not necessarily both set, and StopCoroutine(null) errors.
+    if (AutoSpinRoutine != null)
     {
       StopCoroutine(AutoSpinRoutine);
+      AutoSpinRoutine = null;
+    }
+    if (tweenroutine != null)
+    {
       StopCoroutine(tweenroutine);
       tweenroutine = null;
-      AutoSpinRoutine = null;
-      StopCoroutine(StopAutoSpinCoroutine());
     }
-    //IsAutoSpin = false;
   }
   #endregion
 
@@ -332,6 +336,7 @@ public class SlotBehaviour : MonoBehaviour
       uiManager.FreeSpins--;
       StartSlots(IsAutoSpin);
       yield return tweenroutine;
+      yield return new WaitWhile(() => uiManager.isWinAnimating || m_AnimationController.IsWinPassPlaying);
       yield return new WaitForSeconds(SpinDelay);
       i++;
       if (FSnum_text) FSnum_text.text = (spinchances - i).ToString();
@@ -356,40 +361,6 @@ public class SlotBehaviour : MonoBehaviour
       uiManager.LowBalPopup();
     }
   }
-
-  #region LinesCalculation
-  //Fetch Lines from backend
-  internal void FetchLines(string LineVal, int count)
-  {
-    y_string.Add(count + 1, LineVal);
-    StaticLine_Texts[count].text = (count + 1).ToString();
-    StaticLine_Objects[count].SetActive(true);
-  }
-
-  //Generate Static Lines from button hovers
-  internal void GenerateStaticLine(TMP_Text LineID_Text)
-  {
-    DestroyStaticLine();
-    int LineID = 1;
-    try
-    {
-      LineID = int.Parse(LineID_Text.text);
-    }
-    catch (Exception e)
-    {
-      Debug.Log("Exception while parsing " + e.Message);
-    }
-    List<int> y_points = null;
-    y_points = y_string[LineID]?.Split(',')?.Select(Int32.Parse)?.ToList();
-    PayCalculator.GeneratePayoutLinesBackend(y_points, y_points.Count, true);
-  }
-
-  //Destroy Static Lines from button hovers
-  internal void DestroyStaticLine()
-  {
-    PayCalculator.ResetStaticLine();
-  }
-  #endregion
 
   internal void OnBetClicked(int Bet, double Value)
   {
@@ -424,8 +395,8 @@ public class SlotBehaviour : MonoBehaviour
     BetCounter = 0;
     if (LineBet_text) LineBet_text.text = SocketManager.initialData.bets[BetCounter].ToString();
     if (TotalBet_text) TotalBet_text.text = SocketManager.initialData.bets[BetCounter].ToString();
-    if (TotalWin_text) TotalWin_text.text = "0.000";
-    if (Balance_text) Balance_text.text = SocketManager.playerdata.balance.ToString("f3");
+    if (TotalWin_text) TotalWin_text.text = m_Instructions[1];
+    if (Balance_text) Balance_text.text = SocketManager.playerdata.balance.ToString("F" + UIManager.GetSignificantDecimals(SocketManager.playerdata.balance));
     currentBalance = SocketManager.playerdata.balance;
     currentTotalBet = SocketManager.initialData.bets[BetCounter];
     CompareBalance();
@@ -514,13 +485,14 @@ public class SlotBehaviour : MonoBehaviour
         AutoSpinRoutine = null;
       }
     }
-    WinningsAnim(false);
+    //Clears any banner still on screen — this is both the spin-start reset and, because the auto/free
+    //loops route through here, the top-of-chained-iteration reset. It is also how the player skips.
+    uiManager.SnapResetWinBanner();
     if (SlotStart_Button) SlotStart_Button.interactable = false;
     if (TempList.Count > 0)
     {
       StopGameAnimation();
     }
-    PayCalculator.ResetLines();
     tweenroutine = StartCoroutine(TweenRoutine());
   }
 
@@ -582,7 +554,7 @@ public class SlotBehaviour : MonoBehaviour
     //HACK: This will be used when to send the spin instruction to the socket and wait for the socket to receive the request.
     SocketManager.AccumulateResult(BetCounter);
     yield return new WaitUntil(() => SocketManager.isResultdone);
-    
+
     OrderingUI m_order;
     OrderingUI m_anim_order;
     for (int i = 0; i < Tempimages.Count; i++)
@@ -641,47 +613,15 @@ public class SlotBehaviour : MonoBehaviour
     //HACK: Kills The Tweens So That They Will Get Ready For Next Spin
     KillAllTweens();
 
-    if (SocketManager.resultData.payload.winAmount > 0)
-    {
-
-      SpinDelay = 1.5f;
-    }
-    else
-    {
-      SpinDelay = 0.2f;
-    }
-
-    CheckPopups = true;
+    //The chained-mode loops now wait on the banner itself, so this is just the breath after it clears.
+    SpinDelay = SocketManager.resultData.payload.winAmount > 0 ? postWinBannerDelay : noWinSpinDelay;
 
     BalanceTween?.Kill();
-
-    //HACK: Instruction Updated After Spin Ends If Wins then it shouldn't be updated other wise it will prompt 0th index
-    TotalWin_text.text = m_Instructions[0];
 
     //HACK: Check For The Result And Activate Animations Accordingly
     //Auto/free/feature spins get one synced pass then clear (no infinite cycle); manual spins loop.
     bool autoContinued = IsAutoSpin || IsFreeSpin || SocketManager.resultData.features.freeSpin.isTriggered;
     m_AnimationController.StartAnimation(SocketManager.resultData.payload.winningCombinations, autoContinued);
-
-    // if (SocketManager.resultData.features.freeSpin.wildMultiplier.Count > 0)
-    // {
-    //     //m_AnimationController.FreeSpinCoinAnimate();
-    //     List<List<int>> m_multiplier = SocketManager.resultData.features.freeSpin.wildMultiplier;
-    //     foreach(var i in m_multiplier)
-    //     {
-    //         Tempimages[i[1]].slotImages[i[0]].transform.GetChild(0).gameObject.SetActive(true);
-    //         m_AnimationController.m_AnimatedSlots[i[1]].slotImages[i[0]].transform.GetChild(0).gameObject.SetActive(true);
-    //         Tempimages[i[1]].slotImages[i[0]].transform.GetChild(0).GetComponent<TMP_Text>().text = (i[2]).ToString();
-    //         m_AnimationController.m_AnimatedSlots[i[1]].slotImages[i[0]].transform.GetChild(0).GetComponent<TMP_Text>().text = (i[2]).ToString();
-
-    //         yield return new WaitForSeconds(0.5f);
-
-    //         DOTweenUIManager.Instance.Jump(Tempimages[i[1]].slotImages[i[0]].transform.GetChild(0).GetComponent<RectTransform>(), 50f, 2, 0.6f);
-    //         DOTweenUIManager.Instance.Jump(m_AnimationController.m_AnimatedSlots[i[1]].slotImages[i[0]].transform.GetChild(0).GetComponent<RectTransform>(), 50f, 2, 0.6f);
-    //     }
-
-    //     yield return new WaitForSeconds(1.4f);
-    // }
 
     if (SocketManager.resultData.features.freeSpin.wildMultiplier != null & SocketManager.resultData.features.freeSpin.wildMultiplier.Count > 0)
     {
@@ -694,59 +634,32 @@ public class SlotBehaviour : MonoBehaviour
         Tempimages[y].slotImages[x].transform.GetChild(0).gameObject.SetActive(true);
         m_AnimationController.m_AnimatedSlots[y].slotImages[x].transform.GetChild(0).gameObject.SetActive(true);
 
-        Tempimages[y].slotImages[x].transform.GetChild(0).GetComponent<TMP_Text>().text = multiplier.ToString();
-        m_AnimationController.m_AnimatedSlots[y].slotImages[x].transform.GetChild(0).GetComponent<TMP_Text>().text = multiplier.ToString();
-
-        yield return new WaitForSeconds(0.5f);
-
-        DOTweenUIManager.Instance.Jump(Tempimages[y].slotImages[x].transform.GetChild(0).GetComponent<RectTransform>(), 50f, 2, 0.6f);
-        DOTweenUIManager.Instance.Jump(m_AnimationController.m_AnimatedSlots[y].slotImages[x].transform.GetChild(0).GetComponent<RectTransform>(), 50f, 2, 0.6f);
+        Tempimages[y].slotImages[x].transform.GetChild(0).GetComponent<TMP_Text>().text = multiplier.ToString() +"x";
+        m_AnimationController.m_AnimatedSlots[y].slotImages[x].transform.GetChild(0).GetComponent<TMP_Text>().text = multiplier.ToString() + "x";
       }
-
-      yield return new WaitForSeconds(1.4f);
     }
 
-    if (TotalWin_text) TotalWin_text.text = SocketManager.resultData.payload.winAmount.ToString("f3");
+    if (SocketManager.resultData.payload.winAmount > 0)
+      TotalWin_text.text = SocketManager.resultData.payload.winAmount.ToString("F" + UIManager.GetSignificantDecimals(SocketManager.resultData.payload.winAmount));
+    else if (SocketManager.resultData.payload.winAmount == 0)
+      TotalWin_text.text = "0.00";
 
-    if (Balance_text) Balance_text.text = SocketManager.playerdata.balance.ToString("f3");
+    if (Balance_text) Balance_text.text = SocketManager.playerdata.balance.ToString("F" + UIManager.GetSignificantDecimals(SocketManager.playerdata.balance));
 
     currentBalance = SocketManager.playerdata.balance;
 
-    //if (SocketManager.resultData.jackpot > 0)
-    //{
-    //    uiManager.PopulateWin(4, SocketManager.resultData.jackpot);
-    //    yield return new WaitUntil(() => !CheckPopups);
-    //    CheckPopups = true;
-    //}
-
-    // if (SocketManager.resultData.features.freeSpin.enabled)
-    // {
-    //     CheckBonusGame();
-    // }
-    // else
-
-    CheckWinPopups();
-
-
-    yield return new WaitUntil(() => !CheckPopups);
-    if (!IsAutoSpin && !IsFreeSpin && !SocketManager.resultData.features.freeSpin.isTriggered)
-    {
-      ToggleButtonGrp(true);
-      IsSpinning = false;
-    }
-    else
-    {
-      //yield return new WaitForSeconds(2f);
-      IsSpinning = false;
-    }
-
-    //if(SocketManager.resultData.fsWinningSymbols.Count > 0)
-    //    FreeSpinCoinAnimate();
-
-    //yield return new WaitForSeconds(1f);
+    //Fire-and-forget. Awaiting it here would stall manual spins for the whole banner; the chained-mode
+    //loops poll uiManager.isWinAnimating instead.
+    uiManager.TriggerWinBanner(SocketManager.resultData.payload.winAmount, currentTotalBet);
 
     if (SocketManager.resultData.features.freeSpin.isTriggered)
     {
+      //IsSpinning stays TRUE across the whole handoff. StopAutoSpinCoroutine waits on !IsSpinning and
+      //then kills this coroutine — dropping it early would let a stop-autospin press during the banner
+      //tear TweenRoutine down before FreeSpinProcess runs, silently losing the awarded free spins.
+      yield return new WaitWhile(() => uiManager.isWinAnimating);
+      yield return new WaitWhile(() => m_AnimationController.IsWinPassPlaying);
+
       if (IsFreeSpin)
       {
         IsFreeSpin = false;
@@ -764,10 +677,17 @@ public class SlotBehaviour : MonoBehaviour
       if (IsAutoSpin)
       {
         WasAutoSpinOn = true;
+        IsSpinning = false;
         StopAutoSpin();
         yield return new WaitForSeconds(0.1f);
       }
+      IsSpinning = false;
+      yield break;
     }
+
+    //Manual spins re-arm immediately: clicking Spin again is how the player skips the banner.
+    if (!IsAutoSpin && !IsFreeSpin) ToggleButtonGrp(true);
+    IsSpinning = false;
   }
 
   private IEnumerator BuffaloRushRoutine()
@@ -909,54 +829,18 @@ public class SlotBehaviour : MonoBehaviour
     double initAmount = balance;
 
     balance = balance - bet;
-
+    int decimalPlaces = UIManager.GetSignificantDecimals(balance);
     BalanceTween = DOTween.To(() => initAmount, (val) => initAmount = val, balance, 0.8f).OnUpdate(() =>
     {
-      if (Balance_text) Balance_text.text = initAmount.ToString("f3");
+      if (Balance_text) Balance_text.text = initAmount.ToString("F" + decimalPlaces);
     });
     currentBalance = balance;
-  }
-
-  internal void CheckWinPopups()
-  {
-    if (SocketManager.resultData.payload.winAmount >= currentTotalBet * 5 && SocketManager.resultData.payload.winAmount < currentTotalBet * 10)
-    {
-      audioController.PlayWin(Sound.BigWin);
-      uiManager.PopulateWin(1, SocketManager.resultData.payload.winAmount);
-    }
-    else if (SocketManager.resultData.payload.winAmount >= currentTotalBet * 10)
-    {
-      audioController.PlayWin(Sound.MegaWin);
-      uiManager.PopulateWin(2, SocketManager.resultData.payload.winAmount);
-    }
-    else if (SocketManager.resultData.payload.winAmount > 0 && currentTotalBet < SocketManager.resultData.payload.winAmount)
-    {
-      audioController.PlayWin(Sound.NormalWin);
-      uiManager.PopulateWin(3, SocketManager.resultData.payload.winAmount);
-    }
-    else
-    {
-      CheckPopups = false;
-    }
   }
 
   // internal void CheckBonusGame()
   // {
   //     //_bonusManager.StartBonus((int)SocketManager.resultData.BonusStopIndex);
   // }
-
-  private void WinningsAnim(bool IsStart)
-  {
-    if (IsStart)
-    {
-      WinTween = TotalWin_text.gameObject.GetComponent<RectTransform>().DOScale(new Vector2(1.5f, 1.5f), 1f).SetLoops(-1, LoopType.Yoyo).SetDelay(0);
-    }
-    else
-    {
-      WinTween.Kill();
-      TotalWin_text.gameObject.GetComponent<RectTransform>().localScale = Vector3.one;
-    }
-  }
 
   #endregion
 

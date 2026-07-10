@@ -1,0 +1,93 @@
+{
+  "success": true,
+  "matrix": [
+    [
+      "5",
+      "9",
+      "3",
+      "7",
+      "3",
+      "4"
+    ],
+    [
+      "10",
+      "11",
+      "3",
+      "0",
+      "3",
+      "6"
+    ],
+    [
+      "0",
+      "2",
+      "1",
+      "5",
+      "1",
+      "7"
+    ],
+    [
+      "3",
+      "12",
+      "3",
+      "4",
+      "9",
+      "3"
+    ]
+  ],
+  "id": "ResultData",
+  "payload": {
+    "winAmount": 0.005,
+    "winningCombinations": [
+      {
+        "payout": 0.003,
+        "positions": [
+          [
+            3,
+            0
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            2
+          ]
+        ]
+      },
+      {
+        "payout": 0.002,
+        "positions": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      }
+    ]
+  },
+  "features": {
+    "freeSpin": {
+      "isTriggered": false,
+      "freeSpinCount": 0,
+      "addedCount": 0,
+      "positions": [],
+      "wildMultiplier": []
+    }
+  },
+  "player": {
+    "balance": 17.2385
+  }
+}

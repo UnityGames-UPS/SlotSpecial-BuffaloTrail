@@ -13,6 +13,7 @@ public class AudioController : MonoBehaviour
     [SerializeField] private AudioSource m_FreeSpinEnc_Sound;
     [SerializeField] private AudioSource m_NormalWin_Sound;
     [SerializeField] private AudioSource m_BigWin_Sound;
+    [SerializeField] private AudioSource m_HugeWin_Sound;
     [SerializeField] private AudioSource m_MegaWin_Sound;
     [SerializeField] private AudioSource m_GoldCount_Audio;
     [SerializeField] private AudioSource m_Bull_Audio;
@@ -83,15 +84,24 @@ public class AudioController : MonoBehaviour
         switch (win)
         {
             case Sound.NormalWin:
-                if (m_MainAudioListener.enabled) m_NormalWin_Sound.Play();
+                PlayIfEnabled(m_NormalWin_Sound);
                 break;
             case Sound.BigWin:
-                if (m_MainAudioListener.enabled) m_BigWin_Sound.Play();
+                PlayIfEnabled(m_BigWin_Sound);
+                break;
+            case Sound.HugeWin:
+                PlayIfEnabled(m_HugeWin_Sound);
                 break;
             case Sound.MegaWin:
-                if (m_MainAudioListener.enabled) m_MegaWin_Sound.Play();
+                PlayIfEnabled(m_MegaWin_Sound);
                 break;
         }
+    }
+
+    //Win sources are assigned per-tier in the Editor; an unassigned tier stays silent instead of throwing.
+    private void PlayIfEnabled(AudioSource source)
+    {
+        if (source && m_MainAudioListener.enabled) source.Play();
     }
 
     internal void MuteUnmute(Sound sound, bool toggle, bool config)
@@ -109,6 +119,7 @@ public class AudioController : MonoBehaviour
                 m_GoldCount_Audio.mute = toggle;
                 m_NormalWin_Sound.mute = toggle;
                 m_BigWin_Sound.mute = toggle;
+                if (m_HugeWin_Sound) m_HugeWin_Sound.mute = toggle;
                 m_MegaWin_Sound.mute = toggle;
                 m_FreeSpinEnc_Sound.mute = toggle;
                 m_Bull_Audio.mute = toggle;
@@ -124,6 +135,7 @@ public class AudioController : MonoBehaviour
                     m_GoldCount_Audio.mute = toggle;
                     m_NormalWin_Sound.mute = toggle;
                     m_BigWin_Sound.mute = toggle;
+                    if (m_HugeWin_Sound) m_HugeWin_Sound.mute = toggle;
                     m_MegaWin_Sound.mute = toggle;
                     m_FreeSpinEnc_Sound.mute = toggle;
                     m_BG_Music.mute = toggle;
@@ -143,6 +155,7 @@ public class AudioController : MonoBehaviour
                         m_GoldCount_Audio.mute = toggle;
                         m_NormalWin_Sound.mute = toggle;
                         m_BigWin_Sound.mute = toggle;
+                        if (m_HugeWin_Sound) m_HugeWin_Sound.mute = toggle;
                         m_MegaWin_Sound.mute = toggle;
                         m_FreeSpinEnc_Sound.mute = toggle;
                         m_Bull_Audio.mute = toggle;
@@ -162,4 +175,7 @@ public enum Sound
     All,
     Music,
     Sound,
+    //Appended, not inserted: existing ordinals must stay put for already-serialized values.
+    HugeWin,
+    None,
 }
