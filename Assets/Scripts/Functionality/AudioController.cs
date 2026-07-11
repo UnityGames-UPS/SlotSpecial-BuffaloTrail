@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using DG.Tweening;
 
 public class AudioController : MonoBehaviour
 {
@@ -18,12 +19,29 @@ public class AudioController : MonoBehaviour
     [SerializeField] private AudioSource m_GoldCount_Audio;
     [SerializeField] private AudioSource m_Bull_Audio;
 
+    //Per-symbol win SFX, indexed by (symbolId - 6): 0=Cat, 1=Eagle, 2=Bear, 3=Wolf, 4=Buffalo.
+    [SerializeField] private AudioSource[] m_SymbolWinSounds;
+
     [SerializeField] private bool m_MutedMusic = false;
     [SerializeField] private bool m_MutedSound = false;
+
+    //Original volume of each win-tier source, cached once so FadeOutWinAudio/PlayIfEnabled can
+    //restore it after a DOFade drives it to 0.
+    private readonly Dictionary<AudioSource, float> m_WinAudioOriginalVolume = new Dictionary<AudioSource, float>();
 
     private void Start()
     {
         if (m_BG_Music) m_BG_Music.Play();
+
+        CacheWinAudioVolume(m_NormalWin_Sound);
+        CacheWinAudioVolume(m_BigWin_Sound);
+        CacheWinAudioVolume(m_HugeWin_Sound);
+        CacheWinAudioVolume(m_MegaWin_Sound);
+    }
+
+    private void CacheWinAudioVolume(AudioSource source)
+    {
+        if (source) m_WinAudioOriginalVolume[source] = source.volume;
     }
 
     internal void CheckFocusFunction(bool focus)
@@ -99,9 +117,50 @@ public class AudioController : MonoBehaviour
     }
 
     //Win sources are assigned per-tier in the Editor; an unassigned tier stays silent instead of throwing.
+    //Kills any in-flight fade-out first so a re-triggered source doesn't start at a faded volume.
     private void PlayIfEnabled(AudioSource source)
     {
-        if (source && m_MainAudioListener.enabled) source.Play();
+        if (!source || !m_MainAudioListener.enabled) return;
+        source.DOKill();
+        if (m_WinAudioOriginalVolume.TryGetValue(source, out float original)) source.volume = original;
+        source.Play();
+    }
+
+    //Fades out and stops whichever win-tier source is currently playing (Normal/Big/Huge/Mega), so
+    //skipping to the next spin doesn't leave the previous win's sound running underneath it.
+    internal void FadeOutWinAudio(float duration = 0.15f)
+    {
+        FadeOutIfPlaying(m_NormalWin_Sound, duration);
+        FadeOutIfPlaying(m_BigWin_Sound, duration);
+        FadeOutIfPlaying(m_HugeWin_Sound, duration);
+        FadeOutIfPlaying(m_MegaWin_Sound, duration);
+    }
+
+    private void FadeOutIfPlaying(AudioSource source, float duration)
+    {
+        if (!source || !source.isPlaying) return;
+        source.DOKill();
+        float original = m_WinAudioOriginalVolume.TryGetValue(source, out float v) ? v : source.volume;
+        source.DOFade(0f, duration).OnComplete(() =>
+        {
+            source.Stop();
+            source.volume = original;
+        });
+    }
+
+    internal void PlaySymbolWin(int symbolId)
+    {
+        int idx = symbolId - 6;
+        if (m_SymbolWinSounds == null || idx < 0 || idx >= m_SymbolWinSounds.Length) return;
+        PlayIfEnabled(m_SymbolWinSounds[idx]);
+    }
+
+    //Hard-cuts any playing symbol win SFX; called whenever the win animation moves to a new combo/line.
+    internal void StopAllSymbolWinSounds()
+    {
+        if (m_SymbolWinSounds == null) return;
+        foreach (var source in m_SymbolWinSounds)
+            if (source) source.Stop();
     }
 
     internal void MuteUnmute(Sound sound, bool toggle, bool config)
@@ -123,6 +182,7 @@ public class AudioController : MonoBehaviour
                 m_MegaWin_Sound.mute = toggle;
                 m_FreeSpinEnc_Sound.mute = toggle;
                 m_Bull_Audio.mute = toggle;
+                MuteSymbolWinSounds(toggle);
                 m_MutedSound = toggle;
                 break;
             case Sound.All:
@@ -140,6 +200,7 @@ public class AudioController : MonoBehaviour
                     m_FreeSpinEnc_Sound.mute = toggle;
                     m_BG_Music.mute = toggle;
                     m_Bull_Audio.mute = toggle;
+                    MuteSymbolWinSounds(toggle);
                 }
                 else
                 {
@@ -159,10 +220,18 @@ public class AudioController : MonoBehaviour
                         m_MegaWin_Sound.mute = toggle;
                         m_FreeSpinEnc_Sound.mute = toggle;
                         m_Bull_Audio.mute = toggle;
+                        MuteSymbolWinSounds(toggle);
                     }
                 }
                 break;
         }
+    }
+
+    private void MuteSymbolWinSounds(bool toggle)
+    {
+        if (m_SymbolWinSounds == null) return;
+        foreach (var source in m_SymbolWinSounds)
+            if (source) source.mute = toggle;
     }
 }
 

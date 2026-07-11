@@ -449,6 +449,11 @@ public class UIManager : MonoBehaviour
       OpenPopup(DisconnectPopup_Object);
     }
   }
+
+  internal void HandleFocusMute(bool focused)
+  {
+    if (audioController) audioController.CheckFocusFunction(focused);
+  }
   internal void ReconnectionPopup()
   {
     OpenPopup(ReconnectPopup_Object);
@@ -462,7 +467,13 @@ public class UIManager : MonoBehaviour
   {
     //A zero bet would make every threshold trivially true, so a zero win must short-circuit first.
     int i = winAmount > 0 ? ResolveTierIndex(winAmount, betAmount) : -1;
-    if (i < 0) { SnapResetWinBanner(); return; }   //WinTier.None still clears the previous banner
+    if (i < 0)
+    {
+      SnapResetWinBanner();   //WinTier.None still clears the previous banner
+      //A real win below even the lowest tier still gets the NormalWin sting, just no banner/coins.
+      if (winAmount > 0 && audioController) audioController.PlayWin(Sound.NormalWin);
+      return;
+    }
     PlayBannerTier(i, winAmount);
   }
 
@@ -562,6 +573,8 @@ public class UIManager : MonoBehaviour
   //Instant, no tweens. The pre-arm: a new banner starts clean even if the previous one is mid-flight.
   internal void SnapResetWinBanner()
   {
+    //Whatever win-tier sound was still playing (skipped mid-banner) gets cut off quickly here too.
+    if (audioController) audioController.FadeOutWinAudio();
     if (_winCoroutine != null)
     {
       StopCoroutine(_winCoroutine);

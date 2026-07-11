@@ -15,6 +15,8 @@ public class AnimationController : MonoBehaviour
     [SerializeField]
     private SocketIOManager SocketManager;
     [SerializeField]
+    private AudioController m_AudioController;
+    [SerializeField]
     //Top-level transform (sits above the outside-slot UI in the canvas hierarchy) that a cell is
     //reparented into while its win animation plays, since SetAsLastSibling only reorders within a
     //parent and can't draw over sibling hierarchies.
@@ -181,8 +183,10 @@ public class AnimationController : MonoBehaviour
         }
 
         float duration = ComputeGroupDuration(cells);
+        var playedSymbols = new HashSet<int>();
         foreach (var (col, row) in cells)
         {
+            TryPlaySymbolAudio(col, row, playedSymbols);
             bool show = lastPayout.TryGetValue((col, row), out double payout);
             LightCell(col, row, show, show ? payout : 0, duration);
         }
@@ -200,17 +204,30 @@ public class AnimationController : MonoBehaviour
 
         float duration = ComputeGroupDuration(cells);
         int last = combo.positions.Count - 1;
+        var playedSymbols = new HashSet<int>();
         for (int i = 0; i < combo.positions.Count; i++)
         {
             if (!TryCell(combo.positions[i], out int col, out int row)) continue;
+            TryPlaySymbolAudio(col, row, playedSymbols);
             bool show = showPayouts && (i == last);
             LightCell(col, row, show, show ? combo.payout : 0, duration);
         }
         return duration;
     }
 
+    //Plays a symbol's win SFX once per group (synced pass or single line), keyed by symbol id so
+    //repeats of the same symbol (e.g. 3 wolves) only sound once.
+    private void TryPlaySymbolAudio(int col, int row, HashSet<int> played)
+    {
+        int symbolId = GetSymbolId(col, row);
+        if (symbolId < 6 || symbolId > 10) return;   //only the 5 animal symbols have win SFX
+        if (!played.Add(symbolId)) return;
+        if (m_AudioController != null) m_AudioController.PlaySymbolWin(symbolId);
+    }
+
     private void ResetLine(WinningCombination combo)
     {
+        if (m_AudioController != null) m_AudioController.StopAllSymbolWinSounds();
         if (combo.positions == null) return;
         for (int i = 0; i < combo.positions.Count; i++)   //iterate full positions, matching the play loop
         {
@@ -330,6 +347,7 @@ public class AnimationController : MonoBehaviour
 
     private void ResetAnimatedView()
     {
+        if (m_AudioController != null) m_AudioController.StopAllSymbolWinSounds();
         for (int c = 0; c < m_AnimatedSlots.Count; c++)
             for (int r = 0; r < m_AnimatedSlots[c].slotImages.Count; r++)
                 ResetCell(c, r);

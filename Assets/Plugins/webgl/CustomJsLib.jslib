@@ -52,5 +52,33 @@ mergeInto(LibraryManager.library, {
           window.parent.dispatchReactUnityEvent(message);
         }
       }
-    }
+    },
+
+    RegisterVisibilityChangeListener: function (gameObjectNamePtr) {
+      var gameObjectName = UTF8ToString(gameObjectNamePtr);
+
+      function sendFocusToUnity(focused) {
+          if (typeof SendMessage === 'function') {
+              SendMessage(gameObjectName, 'OnFocusChanged', focused ? '1' : '0');
+          }
+      }
+
+      function handleVisibility() {
+          var focused = document.visibilityState === 'visible';
+          sendFocusToUnity(focused);
+      }
+
+      function handleBlur() { sendFocusToUnity(false); }
+      function handleFocus() { sendFocusToUnity(true); }
+
+      document.removeEventListener('visibilitychange', handleVisibility);
+      document.removeEventListener('webkitvisibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+
+      document.addEventListener('visibilitychange', handleVisibility);
+      document.addEventListener('webkitvisibilitychange', handleVisibility);
+      window.addEventListener('blur', handleBlur);
+      window.addEventListener('focus', handleFocus);
+  }
 });

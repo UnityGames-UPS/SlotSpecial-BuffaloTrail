@@ -1,26 +1,15 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Events;
 using System;
-using UnityEngine.SceneManagement;
-using UnityEngine.Networking;
-using DG.Tweening;
-using System.Linq;
 using Newtonsoft.Json;
 using Best.SocketIO;
 using Best.SocketIO.Events;
-using Newtonsoft.Json.Linq;
-using System.Runtime.Serialization;
-using Best.HTTP.Shared;
 
 public class SocketIOManager : MonoBehaviour
 {
-  [SerializeField]
-  private SlotBehaviour slotManager;
-
-  [SerializeField]
-  private UIManager uiManager;
+  [SerializeField] private SlotBehaviour slotManager;
+  [SerializeField] private UIManager uiManager;
   internal Features initFeatData;
   internal GameData initialData = null;
   internal UiData initUIData = null;
@@ -62,18 +51,86 @@ public class SocketIOManager : MonoBehaviour
   private bool waitingForPong = false;
   private int missedPongs = 0;
   private const int MaxMissedPongs = 5;
-  private Coroutine PingRoutine; //Back2 end       
+  private Coroutine PingRoutine; //Back2 end
+
+  [Header("Focus Kill Switch")]
+  private float focusLostTime = 0f;
+  private Coroutine focusCheckRoutine;
+  private const float maxBackgroundTime = 60f;
+  private bool isExiting = false;
+  private bool isBeingDestroyed = false;
 
   private void Awake()
   {
     isLoaded = false;
     SetInit = false;
 
+    if (JSManager) JSManager.RegisterVisibilityListener(gameObject.name);
   }
 
   private void Start()
   {
     OpenSocket();
+  }
+
+  public void OnFocusChanged(string value)
+  {
+    bool focused = value == "1";
+    if (uiManager) uiManager.HandleFocusMute(focused);
+    HandleFocusChange(focused);
+  }
+
+  private void HandleFocusChange(bool focus)
+  {
+    if (!focus)
+    {
+      focusLostTime = Time.time;
+      if (focusCheckRoutine == null && !isExiting && !isBeingDestroyed)
+      {
+        focusCheckRoutine = StartCoroutine(FocusTimeoutCheck());
+      }
+    }
+    else
+    {
+      if (focusCheckRoutine != null)
+      {
+        StopCoroutine(focusCheckRoutine);
+        focusCheckRoutine = null;
+      }
+    }
+  }
+
+  private IEnumerator FocusTimeoutCheck()
+  {
+    while (Time.time - focusLostTime < maxBackgroundTime)
+    {
+      yield return new WaitForSecondsRealtime(1f);
+    }
+
+    Debug.LogWarning($"⚠️ Backgrounded for {maxBackgroundTime}s — force-closing socket.");
+    isConnected = false;
+    ResetPingRoutine();
+    try
+    {
+      manager?.Close();
+      manager = null;
+    }
+    catch (Exception e)
+    {
+      Debug.LogWarning($"Error closing socket manager during focus timeout: {e.Message}");
+    }
+    if (uiManager) uiManager.DisconnectionPopup();
+    focusCheckRoutine = null;
+  }
+
+  private void OnDestroy()
+  {
+    isBeingDestroyed = true;
+    if (focusCheckRoutine != null)
+    {
+      StopCoroutine(focusCheckRoutine);
+      focusCheckRoutine = null;
+    }
   }
 
   void ReceiveAuthToken(string jsonData)
@@ -191,7 +248,6 @@ public class SocketIOManager : MonoBehaviour
     waitingForPong = false;
     missedPongs = 0;
     lastPongTime = Time.time;
-    SendPing();
   }
 
   private void OnDisconnected()
@@ -345,6 +401,7 @@ public class SocketIOManager : MonoBehaviour
 
   internal IEnumerator CloseSocket() //Back2 Start
   {
+    isExiting = true;
     RaycastBlocker.SetActive(true);
     ResetPingRoutine();
 
@@ -383,6 +440,7 @@ public class SocketIOManager : MonoBehaviour
           {
             PopulateSlotSocket();
             SetInit = true;
+            SendPing();
           }
           else
           {

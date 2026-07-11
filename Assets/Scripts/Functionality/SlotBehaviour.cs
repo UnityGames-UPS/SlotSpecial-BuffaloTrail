@@ -157,6 +157,7 @@ public class SlotBehaviour : MonoBehaviour
   private int BetCounter = 0;
   private double currentBalance = 0;
   private double currentTotalBet = 0;
+  private double freeSpinAccumulatedWin = 0;
   protected int Lines = 20;
   [SerializeField]
   private int IconSizeFactor = 100;       //set this parameter according to the size of the icon and spacing
@@ -514,7 +515,7 @@ public class SlotBehaviour : MonoBehaviour
 
     ToggleButtonGrp(false);
 
-    TotalWin_text.text = m_Instructions[1];
+    if (!IsFreeSpin) TotalWin_text.text = m_Instructions[1];
 
     m_MainUIMask.enabled = true;
 
@@ -639,7 +640,12 @@ public class SlotBehaviour : MonoBehaviour
       }
     }
 
-    if (SocketManager.resultData.payload.winAmount > 0)
+    if (IsFreeSpin)
+    {
+      freeSpinAccumulatedWin += SocketManager.resultData.payload.winAmount;
+      TotalWin_text.text = freeSpinAccumulatedWin.ToString("F" + UIManager.GetSignificantDecimals(freeSpinAccumulatedWin));
+    }
+    else if (SocketManager.resultData.payload.winAmount > 0)
       TotalWin_text.text = SocketManager.resultData.payload.winAmount.ToString("F" + UIManager.GetSignificantDecimals(SocketManager.resultData.payload.winAmount));
     else if (SocketManager.resultData.payload.winAmount == 0)
       TotalWin_text.text = "0.00";
@@ -672,6 +678,7 @@ public class SlotBehaviour : MonoBehaviour
       else
       {
         yield return StartCoroutine(BuffaloRushRoutine());
+        freeSpinAccumulatedWin = 0;
       }
       uiManager.FreeSpinProcess((int)SocketManager.resultData.features.freeSpin.freeSpinCount);
       if (IsAutoSpin)
