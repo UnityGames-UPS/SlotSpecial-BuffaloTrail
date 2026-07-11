@@ -102,6 +102,7 @@ public class UIManager : MonoBehaviour
   private TMP_Text[] SymbolsText;
   [SerializeField]
   private TMP_Text FreeSpin_Text;
+  [SerializeField] private TMP_Text FreeSpin_Text2;
   [SerializeField]
   private TMP_Text Scatter_Text;
   [SerializeField]
@@ -171,6 +172,7 @@ public class UIManager : MonoBehaviour
   private GameObject FreeSpinPopup_Object;
   [SerializeField]
   private TMP_Text Free_Text;
+  
   [SerializeField]
   private Button FreeSpin_Button;
 
@@ -798,8 +800,10 @@ public class UIManager : MonoBehaviour
       if (paylines.symbols[i].name.ToUpper() == "FREESPIN")
       {
         //if (FreeSpin_Text) FreeSpin_Text.text = paylines.symbols[i].description.ToString();
-        string freespintext = $"3x {feat.freeSpin.counts[3]} FREE SPINS \n4x {feat.freeSpin.counts[2]} FREE SPINS \n5x {feat.freeSpin.counts[1]} FREE SPINS \n6x {feat.freeSpin.counts[0]} FREE SPINS";
+        string freespintext = $"Main Game:\n3x {feat.freeSpin.counts[3]} FREE SPINS \n4x {feat.freeSpin.counts[2]} FREE SPINS \n5x {feat.freeSpin.counts[1]} FREE SPINS \n6x {feat.freeSpin.counts[0]} FREE SPINS";
         if (FreeSpin_Text) FreeSpin_Text.text = freespintext;
+        string freespintext2 = $"Free Game:\n3x {feat.freeSpin.countsDuringFreeSpin[3]} FREE SPINS \n4x {feat.freeSpin.countsDuringFreeSpin[2]} FREE SPINS \n5x {feat.freeSpin.countsDuringFreeSpin[1]} FREE SPINS \n6x {feat.freeSpin.countsDuringFreeSpin[0]} FREE SPINS";
+        FreeSpin_Text2.text = freespintext2;
       }
       if (paylines.symbols[i].name.ToUpper() == "SCATTER")
       {
