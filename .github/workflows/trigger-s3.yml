@@ -11,6 +11,6 @@ jobs:
     uses: UnityGames-UPS/unity-build-pipeline/.github/workflows/main.yml@main
     with:
       s3_bucket: unity.build-prod
-      s3_folder: SL-AOG
+      s3_folder: SL-BT
       cloudfront_distribution_id: E1SPDAO62CBV8F
-      invalidate_paths: "/SL-AOG/*"
+      invalidate_paths: "/SL-BT/*"
