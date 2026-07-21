@@ -4,16 +4,16 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <!-- Lock the viewport: no user zoom, cover the notch — so the canvas can pin to innerWidth/innerHeight. -->
+  <!-- Locked viewport: no user zoom, cover the notch. -->
   <meta name="viewport"
     content="width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Buffalo</title>
+  <title>BuffaloTrail</title>
   <style>
     html,
     body {
       margin: 0;
       padding: 0;
-      /* position:fixed + overscroll-behavior:none stop iOS rubber-band / pinch from scrolling the page. */
+      /* fixed + no overscroll: stop iOS rubber-band scrolling */
       position: fixed;
       inset: 0;
       width: 100%;
@@ -45,14 +45,10 @@
   <script>
     const canvas = document.querySelector("#unity-canvas");
     let resizeTimeout;
-    // Unity instance handle — captured once createUnityInstance resolves so the
-    // parent -> iframe message listener (see bottom of this script) can SendMessage into Unity.
-    var unityInstance = null;
-    // De-dupe guard so we only forward a given loader percentage to the host once.
+    var unityInstance = null;   // captured on load so the message listener can SendMessage into Unity
     var lastProgressSent = -1;
 
-    // Forward WebGL loader progress to the iframe host (GameLoader listens for "UnityLoaderProgress").
-    // Loading-complete is NOT reported here — the host hides its loader on Unity's "OnEnter".
+    // Forward loader progress to the host; loading-complete is signalled by Unity's "OnEnter".
     function sendProgressToPlatform(progressValue) {
       var percentage = Math.round(progressValue * 100);
       if (percentage === lastProgressSent) return;
@@ -61,19 +57,13 @@
         window.parent.postMessage({ type: "UnityLoaderProgress", progress: percentage }, "*");
       }
     }
-    // Pin the canvas to the full viewport. Aspect ratio and portrait/landscape rotation are owned
-    // by Unity (OrientationChange.SwitchDisplay), so the page just fills the visible viewport.
+    // Pin the canvas to the visible viewport; Unity (OrientationChange) owns aspect ratio & rotation.
     function resizeCanvas() {
-      // Prefer visualViewport — on iOS it reflects the truly visible area (toolbars/pinch) and,
-      // unlike window.innerWidth/Height, is not stale right after an orientation change.
+      // visualViewport is the accurate visible area on iOS; fall back to innerWidth/Height.
       var vv = window.visualViewport;
       var w = Math.round(vv ? vv.width : window.innerWidth);
       var h = Math.round(vv ? vv.height : window.innerHeight);
-
-      // Snap any pinch/rubber-band offset back to the origin so the canvas stays aligned.
       window.scrollTo(0, 0);
-
-      // Size html/body/canvas explicitly — iOS "100%"/"100vh" on a fixed body is unreliable.
       document.documentElement.style.width = w + "px";
       document.documentElement.style.height = h + "px";
       document.body.style.width = w + "px";
@@ -87,23 +77,14 @@
       resizeTimeout = setTimeout(resizeCanvas, 50);
     }
 
-    // iOS fires orientationchange BEFORE the layout/dimensions settle, so re-apply a few times.
-    function handleOrientationChange() {
-      resizeCanvas();
-      setTimeout(resizeCanvas, 100);
-      setTimeout(resizeCanvas, 300);
-      setTimeout(resizeCanvas, 600);
-    }
-
     window.addEventListener('resize', scheduleResize);
-    window.addEventListener('orientationchange', handleOrientationChange);
+    window.addEventListener('orientationchange', scheduleResize);
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', scheduleResize);
       window.visualViewport.addEventListener('scroll', function () { window.scrollTo(0, 0); });
     }
-    // Keep the game pinned to the viewport. CSS touch-action alone does NOT stop iOS two-finger /
-    // pinch panning — a non-passive touchmove preventDefault is required. Unity still receives the
-    // touch events for game input (preventDefault only cancels the browser's scroll/zoom default).
+    // Scroll-lock: CSS touch-action alone won't stop iOS pinch-pan; non-passive touchmove does.
+    // Unity still receives the touch events (preventDefault only cancels browser scroll/zoom).
     window.addEventListener('scroll', function () { window.scrollTo(0, 0); }, { passive: true });
     document.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
@@ -117,7 +98,7 @@
         codeUrl: buildUrl + "/Build.wasm.unityweb",
         streamingAssetsUrl: "StreamingAssets",
         companyName: "DefaultCompany",
-        productName: "Buffalo",
+        productName: "BuffaloTrail",
         productVersion: "1.0",
       };
 
@@ -146,14 +127,11 @@
         console.error = function() {};
     </script>
     <script>
-      // Inbound bridge: parent (iframe host) -> Unity.
-      // The host posts { type, data } into this iframe; we translate recognized
-      // messages into Unity SendMessage calls on the "SocketManager" GameObject.
+      // Inbound: host posts { type, data } into this iframe -> forward to Unity.
       window.addEventListener("message", function (event) {
         if (!event.data || !event.data.type) return;
         switch (event.data.type) {
-          // NOTE: "TokenReceived" is kept to match the current host contract.
-          // TODO(rename): give this a clearer name (e.g. "AuthTokenResponse") once the host is updated.
+          // "TokenReceived" = host's auth reply (name kept to match host contract; may be renamed later).
           case "TokenReceived":
             if (unityInstance) {
               unityInstance.SendMessage(
@@ -161,12 +139,6 @@
                 "ReceiveAuthToken",
                 JSON.stringify(event.data.data)
               );
-            }
-            break;
-          // Host-initiated graceful close -> C# CloseSocket() closes the socket and emits "OnExit".
-          case "CloseGame":
-            if (unityInstance) {
-              unityInstance.SendMessage("SocketManager", "CloseGame");
             }
             break;
         }
