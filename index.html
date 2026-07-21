@@ -4,33 +4,38 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <!-- Lock the viewport: no user zoom, cover the notch — so the canvas can pin to innerWidth/innerHeight. -->
+  <meta name="viewport"
+    content="width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Buffalo</title>
   <style>
-    body,
-    html {
+    html,
+    body {
       margin: 0;
       padding: 0;
-      overflow: hidden;
-      height: 100%;
+      /* position:fixed + overscroll-behavior:none stop iOS rubber-band / pinch from scrolling the page. */
+      position: fixed;
+      inset: 0;
       width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
       background-color: black;
+      touch-action: none;
     }
 
     #unity-canvas {
-      height: 100%;
+      display: block;
       width: 100%;
+      height: 100%;
+      touch-action: none;
     }
 
-      #loading-screen {
+    #loading-screen {
       position: absolute;
       width: 100%;
       height: 100%;
-  }
-
-
+    }
   </style>
 </head>
 
@@ -39,8 +44,6 @@
   <canvas id="unity-canvas" tabindex="-1"></canvas>
   <script>
     const canvas = document.querySelector("#unity-canvas");
-    var IsMobile = false;
-    var AspectRatio =16/9;
     let resizeTimeout;
     // Unity instance handle — captured once createUnityInstance resolves so the
     // parent -> iframe message listener (see bottom of this script) can SendMessage into Unity.
@@ -58,66 +61,29 @@
         window.parent.postMessage({ type: "UnityLoaderProgress", progress: percentage }, "*");
       }
     }
-    // // Function to detect if the device is mobile
-    function isMobile(unityInstance) {
-        console.log("Called isMobile");
-        
-        var userAgent = navigator.userAgent || navigator.vendor || window.opera;
-        // Check for various mobile devices
-        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        var isIphone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-        // console.log(isMobile);
-        IsMobile = isMobile;
-        if(isMobile == true){
-          AspectRatio=1080 / 2340;
-        }
-        else{
-          AspectRatio=16/9;
-        }
-        resizeCanvas();
-    }
-
-    // Resize canvas based on device type and window size
+    // Pin the canvas to the full viewport. Aspect ratio and portrait/landscape rotation are owned
+    // by Unity (OrientationChange.SwitchDisplay), so the page just fills innerWidth/innerHeight.
     function resizeCanvas() {
-    const isPortrait = window.innerHeight > window.innerWidth;
-    const aspectRatio = isPortrait ? (1080 / 2340) : AspectRatio;
-
-    let windowWidth = window.innerWidth;
-    let windowHeight = window.innerHeight;
-
-    if (IsMobile) {
-        console.log("Mobile Detected");
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        canvas.style.width = `${100}%`;
-        canvas.style.height = `${100}%`;
-
-
-    } else {
-        // PC Landscape Mode
-        let canvasWidth = windowWidth;
-        let canvasHeight = canvasWidth / aspectRatio;
-
-        if (canvasHeight > windowHeight) {
-            canvasHeight = windowHeight;
-            canvasWidth = canvasHeight * aspectRatio;
-        }
-
-        canvas.style.width = `${canvasWidth}px`;
-        canvas.style.height = `${canvasHeight}px`;
-
-        // Force redraw to fix potential rendering issues
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
+      // iOS pinch / rubber-band can shift the scroll offset — snap back so the canvas stays aligned.
+      window.scrollTo(0, 0);
+      canvas.style.width = window.innerWidth + "px";
+      canvas.style.height = window.innerHeight + "px";
     }
-}
 
-    window.addEventListener('resize', () => {
+    function scheduleResize() {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(resizeCanvas, 50);
-    });
+    }
+
+    window.addEventListener('resize', scheduleResize);
+    window.addEventListener('orientationchange', scheduleResize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scheduleResize);
+    }
+    // Keep the game pinned to the viewport and block Safari pinch-zoom that would distort the canvas.
+    window.addEventListener('scroll', () => window.scrollTo(0, 0), { passive: true });
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('gesturechange', (e) => e.preventDefault());
 
     var buildUrl = "Build";
       var loaderUrl = buildUrl + "/Build.loader.js";
@@ -139,7 +105,7 @@
             sendProgressToPlatform(progress);
           }).then((instance) => {
             unityInstance = instance;
-            isMobile(instance);
+            resizeCanvas();
           }).catch((message) => {
             alert(message);
           });
