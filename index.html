@@ -62,12 +62,24 @@
       }
     }
     // Pin the canvas to the full viewport. Aspect ratio and portrait/landscape rotation are owned
-    // by Unity (OrientationChange.SwitchDisplay), so the page just fills innerWidth/innerHeight.
+    // by Unity (OrientationChange.SwitchDisplay), so the page just fills the visible viewport.
     function resizeCanvas() {
-      // iOS pinch / rubber-band can shift the scroll offset — snap back so the canvas stays aligned.
+      // Prefer visualViewport — on iOS it reflects the truly visible area (toolbars/pinch) and,
+      // unlike window.innerWidth/Height, is not stale right after an orientation change.
+      var vv = window.visualViewport;
+      var w = Math.round(vv ? vv.width : window.innerWidth);
+      var h = Math.round(vv ? vv.height : window.innerHeight);
+
+      // Snap any pinch/rubber-band offset back to the origin so the canvas stays aligned.
       window.scrollTo(0, 0);
-      canvas.style.width = window.innerWidth + "px";
-      canvas.style.height = window.innerHeight + "px";
+
+      // Size html/body/canvas explicitly — iOS "100%"/"100vh" on a fixed body is unreliable.
+      document.documentElement.style.width = w + "px";
+      document.documentElement.style.height = h + "px";
+      document.body.style.width = w + "px";
+      document.body.style.height = h + "px";
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
     }
 
     function scheduleResize() {
@@ -75,15 +87,27 @@
       resizeTimeout = setTimeout(resizeCanvas, 50);
     }
 
+    // iOS fires orientationchange BEFORE the layout/dimensions settle, so re-apply a few times.
+    function handleOrientationChange() {
+      resizeCanvas();
+      setTimeout(resizeCanvas, 100);
+      setTimeout(resizeCanvas, 300);
+      setTimeout(resizeCanvas, 600);
+    }
+
     window.addEventListener('resize', scheduleResize);
-    window.addEventListener('orientationchange', scheduleResize);
+    window.addEventListener('orientationchange', handleOrientationChange);
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', scheduleResize);
+      window.visualViewport.addEventListener('scroll', function () { window.scrollTo(0, 0); });
     }
-    // Keep the game pinned to the viewport and block Safari pinch-zoom that would distort the canvas.
-    window.addEventListener('scroll', () => window.scrollTo(0, 0), { passive: true });
-    document.addEventListener('gesturestart', (e) => e.preventDefault());
-    document.addEventListener('gesturechange', (e) => e.preventDefault());
+    // Keep the game pinned to the viewport. CSS touch-action alone does NOT stop iOS two-finger /
+    // pinch panning — a non-passive touchmove preventDefault is required. Unity still receives the
+    // touch events for game input (preventDefault only cancels the browser's scroll/zoom default).
+    window.addEventListener('scroll', function () { window.scrollTo(0, 0); }, { passive: true });
+    document.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+    document.addEventListener('gesturechange', function (e) { e.preventDefault(); });
 
     var buildUrl = "Build";
       var loaderUrl = buildUrl + "/Build.loader.js";
