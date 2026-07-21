@@ -45,7 +45,7 @@
   <script>
     const canvas = document.querySelector("#unity-canvas");
     let resizeTimeout;
-    var unityInstance = null;   // captured on load so the message listener can SendMessage into Unity
+    var unityInstance = null;   // captured on load; jslib listeners use it as a SendMessage fallback
     var lastProgressSent = -1;
 
     // Forward loader progress to the host; loading-complete is signalled by Unity's "OnEnter".
@@ -126,24 +126,7 @@
         console.warn = function() {};
         console.error = function() {};
     </script>
-    <script>
-      // Inbound: host posts { type, data } into this iframe -> forward to Unity.
-      window.addEventListener("message", function (event) {
-        if (!event.data || !event.data.type) return;
-        switch (event.data.type) {
-          // "TokenReceived" = host's auth reply (name kept to match host contract; may be renamed later).
-          case "TokenReceived":
-            if (unityInstance) {
-              unityInstance.SendMessage(
-                "SocketManager",
-                "ReceiveAuthToken",
-                JSON.stringify(event.data.data)
-              );
-            }
-            break;
-        }
-      });
-    </script>
+    <!-- Inbound host messages (TokenReceived) are handled by CustomJsLib.jslib, registered from C#. -->
     <script>
       window.focus();
     </script>
