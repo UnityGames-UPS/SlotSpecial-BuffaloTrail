@@ -44,7 +44,6 @@
   <canvas id="unity-canvas" tabindex="-1"></canvas>
   <script>
     const canvas = document.querySelector("#unity-canvas");
-    let resizeTimeout;
     var unityInstance = null;   // captured on load; jslib listeners use it as a SendMessage fallback
     var lastProgressSent = -1;
 
@@ -86,45 +85,41 @@
     document.addEventListener('gesturechange', function (e) { e.preventDefault(); });
 
     var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/Build.loader.js";
-      var config = {
-        dataUrl: buildUrl + "/Build.data.unityweb",
-        frameworkUrl: buildUrl + "/Build.framework.js.unityweb",
-        codeUrl: buildUrl + "/Build.wasm.unityweb",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "DefaultCompany",
-        productName: "BuffaloTrail",
-        productVersion: "1.0",
-      };
+    var loaderUrl = buildUrl + "/Build.loader.js";
+    var config = {
+      dataUrl: buildUrl + "/Build.data.unityweb",
+      frameworkUrl: buildUrl + "/Build.framework.js.unityweb",
+      codeUrl: buildUrl + "/Build.wasm.unityweb",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "BuffaloTrail",
+      productVersion: "1.0",
+    };
 
-        
-        var script = document.createElement("script");
-        script.src = loaderUrl;
-        script.onload = () => {
-          createUnityInstance(canvas, config, (progress) => {
-            sendProgressToPlatform(progress);
-          }).then((instance) => {
-            unityInstance = instance;
-            resizeCanvas();
-          }).catch((message) => {
-            alert(message);
-          });
-
-        };
-        script
-        
-        document.body.appendChild(script);
-       // window.addEventListener('load', resizeCanvas());
+    var script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = () => {
+      createUnityInstance(canvas, config, (progress) => {
+        sendProgressToPlatform(progress);
+      }).then((instance) => {
+        unityInstance = instance;
+        resizeCanvas();
+      }).catch((message) => {
+        alert(message);
+      });
+    };
+    document.body.appendChild(script);
   </script>
-     <script type="text/javascript">
-        console.log = function() {};
-        console.warn = function() {};
-        console.error = function() {};
-    </script>
-    <!-- Inbound host messages (TokenReceived) are handled by CustomJsLib.jslib, registered from C#. -->
-    <script>
-      window.focus();
-    </script>
+  <script type="text/javascript">
+    console.log = function () {};
+    console.warn = function () {};
+    console.error = function () {};
+  </script>
+  <!-- Inbound host messages (TokenReceived) are handled by CustomJsLib.jslib, registered from C#. -->
+  <script>
+    window.focus();
+  </script>
+
 </body>
 
 </html>
