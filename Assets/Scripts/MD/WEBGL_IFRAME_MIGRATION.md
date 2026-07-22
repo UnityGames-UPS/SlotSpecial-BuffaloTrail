@@ -127,7 +127,6 @@ setting). Full file:
   <canvas id="unity-canvas" tabindex="-1"></canvas>
   <script>
     const canvas = document.querySelector("#unity-canvas");
-    let resizeTimeout;
     var unityInstance = null;   // captured on load; jslib listeners use it as a SendMessage fallback
     var lastProgressSent = -1;
 
@@ -155,15 +154,10 @@ setting). Full file:
       canvas.style.height = h + "px";
     }
 
-    function scheduleResize() {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(resizeCanvas, 50);
-    }
-
-    window.addEventListener('resize', scheduleResize);
-    window.addEventListener('orientationchange', scheduleResize);
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', resizeCanvas);
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', scheduleResize);
+      window.visualViewport.addEventListener('resize', resizeCanvas);
       window.visualViewport.addEventListener('scroll', function () { window.scrollTo(0, 0); });
     }
     // Scroll-lock: CSS touch-action alone won't stop iOS pinch-pan; non-passive touchmove does.
@@ -518,6 +512,12 @@ and **remove `CloseGame`** (removing the iframe closes the socket by itself). Fu
 - **Host → Unity:** `TokenReceived { cookie, socketURL, nameSpace }` — the only message the host sends.
 - **Unity → Host:** `authToken`, `UnityLoaderProgress { progress: 0..100 }`, `OnEnter` (ready — hide
   loader), `OnExit`, `session_expired`, `error`.
+
+> **Decision — do not reintroduce `CloseGame` / `unityInstance.Quit()`.** A graceful teardown
+> (host posts `CloseGame` → in-iframe listener calls `unityInstance.Quit()` → `OnExit` → host removes
+> the iframe) was evaluated and rejected. Closing = **remove the iframe**: that alone closes the
+> socket and frees the WASM heap, which `unityInstance.Quit()` does not do. See §3 of
+> `IFRAME_HOST_CHANGES.md` for the full rationale.
 
 ## Final: tell the human to build & test (Safari iOS is the reference)
 Build with the `custom` template, load in the iframe host, and confirm: token/connect →
