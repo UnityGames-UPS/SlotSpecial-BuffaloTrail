@@ -41,6 +41,8 @@
   <canvas id="unity-canvas" tabindex="-1"></canvas>
   <script>
     const canvas = document.querySelector("#unity-canvas");
+    var unityInstance = null;   // captured on load; jslib listeners use it as a SendMessage fallback
+    var lastProgressSent = -1;
 
     function resizeCanvas() {
       // visualViewport is the accurate visible area on iOS; fall back to innerWidth/Height.
@@ -109,7 +111,6 @@
     <script>
       window.focus();
     </script>
-
 </body>
 
 </html>
