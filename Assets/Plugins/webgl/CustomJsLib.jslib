@@ -57,7 +57,22 @@ mergeInto(LibraryManager.library, {
     RegisterVisibilityChangeListener: function (gameObjectNamePtr) {
       var gameObjectName = UTF8ToString(gameObjectNamePtr);
 
+      function setUnityAudioSuspended(suspended) {
+          try {
+              var wa = (typeof WEBAudio !== 'undefined') ? WEBAudio
+                     : (typeof Module !== 'undefined' && Module.WEBAudio) ? Module.WEBAudio
+                     : null;
+              if (!wa || !wa.audioContext) return;
+              if (suspended) {
+                  if (wa.audioContext.state === 'running') wa.audioContext.suspend();
+              } else {
+                  if (wa.audioContext.state === 'suspended') wa.audioContext.resume();
+              }
+          } catch (err) { console.warn('[JS] Unity audio suspend/resume failed:', err); }
+      }
+
       function sendFocusToUnity(focused) {
+          setUnityAudioSuspended(!focused);
           if (typeof SendMessage === 'function') {
               SendMessage(gameObjectName, 'OnFocusChanged', focused ? '1' : '0');
           }

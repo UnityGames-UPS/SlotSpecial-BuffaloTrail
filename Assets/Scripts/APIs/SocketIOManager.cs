@@ -20,8 +20,6 @@ public class SocketIOManager : MonoBehaviour
   internal bool isResultdone = false;
   private SocketManager manager;
 
-  [SerializeField]
-  internal JSHandler _jsManager;
   protected string nameSpace = "playground"; //BackendChanges
   private Socket gameSocket; //BackendChanges
   protected string SocketURI = null;
@@ -102,9 +100,15 @@ public class SocketIOManager : MonoBehaviour
 
   private IEnumerator FocusTimeoutCheck()
   {
-    while (Time.time - focusLostTime < maxBackgroundTime)
+    while (Time.time - focusLostTime < maxBackgroundTime && !isExiting && !isBeingDestroyed)
     {
       yield return new WaitForSecondsRealtime(1f);
+    }
+
+    if (isExiting || isBeingDestroyed)
+    {
+      focusCheckRoutine = null;
+      yield break;
     }
 
     Debug.LogWarning($"⚠️ Backgrounded for {maxBackgroundTime}s — force-closing socket.");
@@ -402,6 +406,11 @@ public class SocketIOManager : MonoBehaviour
   internal IEnumerator CloseSocket() //Back2 Start
   {
     isExiting = true;
+    if (focusCheckRoutine != null)
+    {
+      StopCoroutine(focusCheckRoutine);
+      focusCheckRoutine = null;
+    }
     RaycastBlocker.SetActive(true);
     ResetPingRoutine();
 
