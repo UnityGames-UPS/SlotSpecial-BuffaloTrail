@@ -72,15 +72,10 @@
       canvas.style.height = h + "px";
     }
 
-    function scheduleResize() {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(resizeCanvas, 50);
-    }
-
-    window.addEventListener('resize', scheduleResize);
-    window.addEventListener('orientationchange', scheduleResize);
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', resizeCanvas);
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', scheduleResize);
+      window.visualViewport.addEventListener('resize', resizeCanvas);
       window.visualViewport.addEventListener('scroll', function () { window.scrollTo(0, 0); });
     }
     // Scroll-lock: CSS touch-action alone won't stop iOS pinch-pan; non-passive touchmove does.
@@ -130,7 +125,6 @@
     <script>
       window.focus();
     </script>
-
 </body>
 
 </html>
