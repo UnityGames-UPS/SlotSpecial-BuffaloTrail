@@ -25,6 +25,11 @@ public class AudioController : MonoBehaviour
     [SerializeField] private bool m_MutedMusic = false;
     [SerializeField] private bool m_MutedSound = false;
 
+    //True while audio is silenced because the game lost focus, as opposed to because the user muted it.
+    //Guards CheckFocusFunction against duplicate blur/focus signals; cleared by any user-driven
+    //MuteUnmute so a stray unpaired blur can't leave the sound/music buttons unable to re-mute later.
+    private bool isForceMuted = false;
+
     //Original volume of each win-tier source, cached once so FadeOutWinAudio/PlayIfEnabled can
     //restore it after a DOFade drives it to 0.
     private readonly Dictionary<AudioSource, float> m_WinAudioOriginalVolume = new Dictionary<AudioSource, float>();
@@ -44,19 +49,19 @@ public class AudioController : MonoBehaviour
         if (source) m_WinAudioOriginalVolume[source] = source.volume;
     }
 
+    //Shared focus-mute entry point: both the JS bridge (SocketIOManager.OnFocusChanged) and Unity's
+    //native OnApplicationFocus route here, and in a WebGL build either or both may fire for the same
+    //blur/focus event. isForceMuted makes a duplicate call for the same direction a no-op so the
+    //second one can't re-run the restore against an already-forced state.
+    //Never touches m_MutedMusic/m_MutedSound — those hold the user's own choice and are written only
+    //by the sound/music buttons, so regaining focus restores exactly what the user last picked.
     internal void CheckFocusFunction(bool focus)
     {
-        //m_MainAudioListener.enabled = focus;
-        if (!focus)
-        {
-            //m_MainAudioListener.enabled = focus;
-            MuteUnmute(Sound.All, true, false);
-        }
-        else
-        {
-            //m_MainAudioListener.enabled = focus;
-            MuteUnmute(Sound.All, false, false);
-        }
+        bool forceMute = !focus;
+        if (forceMute == isForceMuted) return;
+        isForceMuted = forceMute;
+
+        MuteUnmute(Sound.All, forceMute, false);
     }
 
     internal void PlayNormalButton()
@@ -165,6 +170,11 @@ public class AudioController : MonoBehaviour
 
     internal void MuteUnmute(Sound sound, bool toggle, bool config)
     {
+        //config==true means this came from the user's own sound/music button. An explicit tap proves the
+        //game really has focus, so drop any lingering forced-mute rather than letting a stale blur
+        //signal keep the focus state (and the guard in CheckFocusFunction) out of sync with reality.
+        if (config) isForceMuted = false;
+
         switch (sound)
         {
             case Sound.Music:

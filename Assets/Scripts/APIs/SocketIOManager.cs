@@ -232,6 +232,7 @@ public class SocketIOManager : MonoBehaviour
     gameSocket.On<string>("internalError", OnSocketError);
     gameSocket.On<string>("alert", OnSocketAlert);
     gameSocket.On<string>("pong", OnPongReceived);
+    gameSocket.On<string>("balance:sync", OnBalanceSync);
     gameSocket.On<string>("AnotherDevice", OnSocketOtherDevice);
 
     manager.Open();
@@ -270,6 +271,20 @@ public class SocketIOManager : MonoBehaviour
     lastPongTime = Time.time;
     // Debug.Log($"⏱️ Updated last pong time: {lastPongTime}");
     // Debug.Log($"📦 Pong payload: {data}");
+  }
+
+  //Out-of-band balance push from the backend — can arrive at any time, not just as part of a spin
+  //result. The payload also carries userId/gameId; both identify the player to the backend and are
+  //unused client-side. Deserialized from the raw string like every other complex payload here.
+  private void OnBalanceSync(string data)
+  {
+    BalanceSyncPayload syncPayload = JsonConvert.DeserializeObject<BalanceSyncPayload>(data);
+    if (syncPayload == null) return;
+
+    if (playerdata == null) playerdata = new Player();
+    playerdata.balance = syncPayload.balance;
+
+    if (slotManager) slotManager.UpdateBalanceDisplay(syncPayload.balance);
   }
 
   private void OnError(Error err)
@@ -622,6 +637,14 @@ public class Paylines
 public class Player
 {
   public double balance { get; set; }
+}
+
+//Payload of the "balance:sync" event. userId/gameId are present on the wire but intentionally not
+//declared — they're backend-side identifiers with no client use.
+[Serializable]
+public class BalanceSyncPayload
+{
+  public double balance;
 }
 
 [Serializable]

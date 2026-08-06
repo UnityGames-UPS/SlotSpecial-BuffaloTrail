@@ -73,27 +73,34 @@ mergeInto(LibraryManager.library, {
 
       function sendFocusToUnity(focused) {
           setUnityAudioSuspended(!focused);
-          if (typeof SendMessage === 'function') {
-              SendMessage(gameObjectName, 'OnFocusChanged', focused ? '1' : '0');
+          try {
+              var value = focused ? '1' : '0';
+              if (typeof SendMessage === 'function') {
+                  SendMessage(gameObjectName, 'OnFocusChanged', value);
+              } else if (typeof unityInstance !== 'undefined' && unityInstance && unityInstance.SendMessage) {
+                  unityInstance.SendMessage(gameObjectName, 'OnFocusChanged', value);
+              }
+          } catch (err) {
+              console.error('[JS] Error sending focus message to Unity:', err);
           }
       }
 
-      function handleVisibility() {
-          var focused = document.visibilityState === 'visible';
-          sendFocusToUnity(focused);
-      }
+      window._unityVisibilityCallback = function() {
+          var hidden = document.hidden || document.webkitHidden;
+          sendFocusToUnity(!hidden);
+      };
+      window._unityWindowBlurCallback  = function() { sendFocusToUnity(false); };
+      window._unityWindowFocusCallback = function() { sendFocusToUnity(true); };
 
-      function handleBlur() { sendFocusToUnity(false); }
-      function handleFocus() { sendFocusToUnity(true); }
+      // Remove before re-adding to avoid duplicates
+      document.removeEventListener('visibilitychange',       window._unityVisibilityCallback);
+      document.removeEventListener('webkitvisibilitychange', window._unityVisibilityCallback);
+      window.removeEventListener('blur',  window._unityWindowBlurCallback);
+      window.removeEventListener('focus', window._unityWindowFocusCallback);
 
-      document.removeEventListener('visibilitychange', handleVisibility);
-      document.removeEventListener('webkitvisibilitychange', handleVisibility);
-      window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('focus', handleFocus);
-
-      document.addEventListener('visibilitychange', handleVisibility);
-      document.addEventListener('webkitvisibilitychange', handleVisibility);
-      window.addEventListener('blur', handleBlur);
-      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange',       window._unityVisibilityCallback);
+      document.addEventListener('webkitvisibilitychange', window._unityVisibilityCallback);
+      window.addEventListener('blur',  window._unityWindowBlurCallback);
+      window.addEventListener('focus', window._unityWindowFocusCallback);
   }
 });

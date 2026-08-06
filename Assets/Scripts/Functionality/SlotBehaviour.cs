@@ -355,6 +355,16 @@ public class SlotBehaviour : MonoBehaviour
   }
   #endregion
 
+  //Snaps the balance to a server-pushed value (balance:sync). Deliberately not tweened like a spin
+  //payout — this is an external correction, not something the player just won. Re-runs the low-balance
+  //check because a push can move the player below the current bet outside of any spin flow.
+  internal void UpdateBalanceDisplay(double newBalance)
+  {
+    currentBalance = newBalance;
+    if (Balance_text) Balance_text.text = newBalance.ToString("F" + UIManager.GetSignificantDecimals(newBalance));
+    CompareBalance();
+  }
+
   private void CompareBalance()
   {
     if (currentBalance < currentTotalBet)
