@@ -39,6 +39,15 @@ mergeInto(LibraryManager.library, {
           }
       }
 
+      // Remove the previously registered handlers (if any) before overwriting the refs,
+      // otherwise the old listeners stay attached forever and fire twice.
+      if (window._unityVisibilityCallback) {
+          document.removeEventListener('visibilitychange',       window._unityVisibilityCallback);
+          document.removeEventListener('webkitvisibilitychange', window._unityVisibilityCallback);
+      }
+      if (window._unityWindowBlurCallback)  window.removeEventListener('blur',  window._unityWindowBlurCallback);
+      if (window._unityWindowFocusCallback) window.removeEventListener('focus', window._unityWindowFocusCallback);
+
       window._unityVisibilityCallback = function() {
           var hidden = document.hidden || document.webkitHidden;
           sendFocusToUnity(!hidden);
@@ -46,21 +55,10 @@ mergeInto(LibraryManager.library, {
       window._unityWindowBlurCallback  = function() { sendFocusToUnity(false); };
       window._unityWindowFocusCallback = function() { sendFocusToUnity(true); };
 
-      // Remove before re-adding to avoid duplicates
-      document.removeEventListener('visibilitychange',       window._unityVisibilityCallback);
-      document.removeEventListener('webkitvisibilitychange', window._unityVisibilityCallback);
-      window.removeEventListener('blur',  window._unityWindowBlurCallback);
-      window.removeEventListener('focus', window._unityWindowFocusCallback);
-
-      document.removeEventListener('visibilitychange', handleVisibility);
-      document.removeEventListener('webkitvisibilitychange', handleVisibility);
-      window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('focus', handleFocus);
-
-      document.addEventListener('visibilitychange', handleVisibility);
-      document.addEventListener('webkitvisibilitychange', handleVisibility);
-      window.addEventListener('blur', handleBlur);
-      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange',       window._unityVisibilityCallback);
+      document.addEventListener('webkitvisibilitychange', window._unityVisibilityCallback);
+      window.addEventListener('blur',  window._unityWindowBlurCallback);
+      window.addEventListener('focus', window._unityWindowFocusCallback);
   },
 
   // Self-contained resize bridge: the Unity page listens to its own viewport and pushes
