@@ -1,2 +1,1 @@
 # SlotSpecial-BuffaloTrail
-test
